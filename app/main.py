@@ -21,7 +21,6 @@ from pypdf import PdfReader
 from starlette.middleware.sessions import SessionMiddleware
 
 from .db import UPLOAD_DIR, execute, executescript, fetch_all, fetch_one, ensure_dirs
-from .xlsx_reader import has_xlsx_content
 
 ROOT = Path(__file__).resolve().parent.parent
 PUBLIC_DIR = ROOT / "public"
@@ -391,15 +390,26 @@ def redirect_if_unauthenticated(request: Request, target: str):
     return None
 
 
-ALLOWED_UPLOAD_EXTENSIONS = {".pdf", ".csv", ".xlsx"}
+ALLOWED_UPLOAD_EXTENSIONS = {".pdf", ".csv"}
 ALLOWED_UPLOAD_CONTENT_TYPES = {
     "application/pdf",
     "application/x-pdf",
     "text/csv",
     "application/csv",
     "application/vnd.ms-excel",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 }
+
+CSV_ENCODINGS = ("utf-8-sig", "utf-8", "cp1252", "latin-1")
+
+
+def load_csv_rows(path: Path) -> list[list[str]]:
+    for encoding in CSV_ENCODINGS:
+        try:
+            with path.open("r", encoding=encoding, newline="") as handle:
+                return list(csv.reader(handle))
+        except UnicodeDecodeError:
+            continue
+    raise ValueError("CSV encoding is not supported")
 
 
 def validate_document_upload_metadata(upload: UploadFile) -> None:
@@ -407,11 +417,11 @@ def validate_document_upload_metadata(upload: UploadFile) -> None:
         raise HTTPException(status_code=400, detail="file is required")
     suffix = Path(upload.filename).suffix.lower()
     if suffix not in ALLOWED_UPLOAD_EXTENSIONS:
-        raise HTTPException(status_code=400, detail="Only PDF, CSV, and XLSX files are allowed")
+        raise HTTPException(status_code=400, detail="Only PDF and CSV files are allowed")
 
     content_type = (upload.content_type or "").lower().strip()
     if content_type and content_type not in ALLOWED_UPLOAD_CONTENT_TYPES:
-        raise HTTPException(status_code=400, detail="Only PDF, CSV, and XLSX files are allowed")
+        raise HTTPException(status_code=400, detail="Only PDF and CSV files are allowed")
 
 
 def save_upload_file(upload: UploadFile, destination: Path) -> int:
@@ -439,20 +449,15 @@ def validate_saved_document(path: Path) -> None:
                 raise ValueError("PDF has no pages")
             return
         if suffix == ".csv":
-            with path.open("r", encoding="utf-8-sig", newline="") as handle:
-                reader = csv.reader(handle)
-                has_content = any(any(str(cell).strip() for cell in row) for row in reader)
+            rows = load_csv_rows(path)
+            has_content = any(any(str(cell).strip() for cell in row) for row in rows)
             if not has_content:
                 raise ValueError("CSV has no content")
-            return
-        if suffix == ".xlsx":
-            if not has_xlsx_content(path):
-                raise ValueError("XLSX has no content")
             return
         raise ValueError("Unsupported file type")
     except Exception as exc:
         path.unlink(missing_ok=True)
-        raise HTTPException(status_code=400, detail="Uploaded file is not a valid PDF, CSV, or XLSX document") from exc
+        raise HTTPException(status_code=400, detail="Uploaded file is not a valid PDF or CSV document") from exc
 
 
 def index_document_with_pinecone(document_row: dict[str, Any]) -> dict[str, Any]:

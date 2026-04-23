@@ -648,13 +648,13 @@
       <section class="panel">
         <div class="panel-header">
           <div class="panel-title">Document Ingestion</div>
-          <div class="panel-hint">Upload PDF, CSV, or XLSX files and trigger ingestion workflow.</div>
+          <div class="panel-hint">Upload PDF or CSV files and trigger ingestion workflow.</div>
         </div>
 
         <form id="upload-form" enctype="multipart/form-data">
           <div class="field">
-            <label for="pdf-file">PDF, CSV, or XLSX files</label>
-            <input id="pdf-file" type="file" accept="application/pdf,.pdf,text/csv,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xlsx" multiple required />
+            <label for="pdf-file">PDF or CSV files</label>
+            <input id="pdf-file" type="file" accept="application/pdf,.pdf,text/csv,.csv" multiple required />
           </div>
           <div class="actions" style="margin-top:8px;">
             <button id="upload-doc-btn" type="submit" class="btn btn-primary">Upload and Ingest</button>
@@ -945,7 +945,7 @@
       const files = Array.from(fileInput.files);
       
       if (files.length === 0) {
-        setNotice(docsNotice, 'Please select one or more PDF, CSV, or XLSX files.', 'error');
+        setNotice(docsNotice, 'Please select one or more PDF or CSV files.', 'error');
         setBusy(uploadDocBtn, false, 'Upload and Ingest');
         return;
       }
