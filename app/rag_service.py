@@ -347,7 +347,14 @@ class RAGService:
                 "You answer only from the uploaded MediLink insurance documents. "
                 "Use the retrieve_document_context tool before answering document-specific questions. "
                 "If the tool does not return relevant context, say you could not find the answer in the uploaded documents. "
-                "Keep the answer concise, factual, and grounded in the retrieved passages. "
+                "Answer like a helpful insurance support representative speaking naturally to a customer. "
+                "Keep the answer concise, factual, conversational, and grounded in the retrieved passages. "
+                "Use plain spoken language, as if replying in a chat conversation with a member. "
+                "Prefer one short paragraph, or at most two short paragraphs. "
+                "Do not use headings, bullet points, numbered lists, markdown tables, or decorative formatting unless the user explicitly asks for that format. "
+                "Do not use bold, italics, emojis, or horizontal rules. "
+                "Explain plan limits in simple terms when possible. "
+                "If the question is broad, summarize the key points first in normal sentences instead of listing every matching benefit. "
                 "Do not append source references, citation brackets, filenames, or page numbers at the end of the answer. "
                 "Do not show tool output, retrieved passages, or hidden reasoning. "
                 "Do not use any introductory phrases or preambles like 'Let me check', 'I will retrieve', or 'Based on the documents'. "
@@ -443,12 +450,13 @@ class RAGService:
                 continue
             documents.append(
                 Document(
-                    page_content=f"Document: {file_path.name}\nContent: {content}",
+                    page_content=content,
                     metadata={
                         "page_number": row_number,
-                        "section_title": f"CSV row {row_number} of {file_path.name}",
                         "row_number": row_number,
+                        "section_title": f"CSV row {row_number} of {file_path.name}",
                         "columns": headers,
+                        "source_name": file_path.name,
                         "source": file_path.name
                     },
                 )
@@ -468,6 +476,8 @@ class RAGService:
         source_documents = self._extract_source_documents(path)
         if not source_documents:
             raise ValueError("No extractable text was found in the uploaded document")
+        if path.suffix.lower() == ".csv":
+            return [Document(page_content=doc.page_content, metadata={**base_metadata, **(doc.metadata or {})}) for doc in source_documents]
         return self._build_semantic_chunks(source_documents, base_metadata)
 
     def _build_semantic_chunks(self, page_documents: list[Document], base_metadata: dict[str, Any]) -> list[Document]:
