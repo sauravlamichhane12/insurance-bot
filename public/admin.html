@@ -1,0 +1,1028 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin Dashboard</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap');
+
+    :root {
+      --brand-700: #0369a1;
+      --brand-600: #0284c7;
+      --brand-500: #0ea5e9;
+      --brand-100: #e0f2fe;
+      --bg: #f0f9ff;
+      --surface: #ffffff;
+      --surface-alt: #f8fafc;
+      --border: #e2e8f0;
+      --text: #1f2937;
+      --muted: #64748b;
+      --danger: #b42318;
+      --danger-bg: #fef3f2;
+      --ok: #067647;
+      --ok-bg: #ecfdf3;
+      --info: #175cd3;
+      --radius: 14px;
+      --shadow-sm: 0 4px 10px rgba(2, 6, 23, 0.04);
+      --shadow-md: 0 14px 28px rgba(2, 6, 23, 0.08);
+      --fs-xs: 0.8rem;
+      --fs-sm: 0.92rem;
+      --fs-md: 1rem;
+      --fs-lg: 1.3rem;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: 'Manrope', sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top right, #e0f2fe 0%, transparent 36%),
+        radial-gradient(circle at top left, #f4fbff 0%, transparent 28%),
+        var(--bg);
+      min-height: 100vh;
+      animation: fadeIn 0.35s ease;
+    }
+
+    .shell {
+      width: min(1400px, calc(100% - 24px));
+      margin: 12px auto 22px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .topbar {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: none;
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .topbar::after {
+      content: none;
+    }
+
+    .title-wrap {
+      display: grid;
+      gap: 3px;
+    }
+
+    .eyebrow {
+      color: var(--brand-700);
+      font-size: 0.74rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .title {
+      font-size: var(--fs-lg);
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      font-size: var(--fs-sm);
+    }
+
+    .actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      border: 1px solid transparent;
+      border-radius: 999px;
+      padding: 8px 14px;
+      font-size: 0.84rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 36px;
+      box-shadow: none !important;
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+      box-shadow: none !important;
+    }
+
+    .btn-primary {
+      color: #fff;
+      background: linear-gradient(135deg, var(--brand-600), var(--brand-500));
+    }
+
+    .btn-muted {
+      color: #334155;
+      border-color: #dbe3ed;
+      background: #f8fafc;
+    }
+
+    .btn-danger {
+      color: #fff;
+      background: #0f172a;
+    }
+
+    .logout-btn,
+    .logout-btn:hover,
+    .logout-btn:focus,
+    .logout-btn:active {
+      box-shadow: none !important;
+      filter: none !important;
+      transform: none !important;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .stat {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-sm);
+      padding: 12px;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .stat::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 3px;
+      background: linear-gradient(90deg, var(--brand-600), #f9a66b);
+    }
+
+    .stat:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 16px 28px rgba(15, 23, 42, 0.1);
+    }
+
+    .stat-label {
+      color: var(--muted);
+      font-size: var(--fs-xs);
+      margin-bottom: 6px;
+    }
+
+    .stat-value {
+      font-size: 1.34rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1.05fr 1fr;
+      gap: 14px;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: var(--shadow-sm);
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+      min-width: 0;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .panel::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 2px;
+      background: linear-gradient(90deg, rgba(14, 165, 233, 0.55), rgba(56, 189, 248, 0.3));
+    }
+
+    .panel-header {
+      display: grid;
+      gap: 3px;
+    }
+
+    .panel-title {
+      font-size: 1.02rem;
+      font-weight: 700;
+    }
+
+    .panel-hint {
+      color: var(--muted);
+      font-size: var(--fs-sm);
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .field {
+      display: grid;
+      gap: 5px;
+    }
+
+    .field label {
+      font-size: 0.8rem;
+      color: #475467;
+      font-weight: 600;
+    }
+
+    input,
+    select {
+      width: 100%;
+      border: 1px solid #d0d9e4;
+      background: #fff;
+      color: #1f2937;
+      border-radius: 10px;
+      padding: 10px 11px;
+      font-size: 0.88rem;
+      outline: none;
+    }
+
+    input:focus,
+    select:focus {
+      border-color: #f38742;
+      box-shadow: 0 0 0 3px rgba(243, 135, 66, 0.18);
+    }
+
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #fff;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 700px;
+      font-size: 0.84rem;
+    }
+
+    th,
+    td {
+      border-bottom: 1px solid #edf2f7;
+      text-align: left;
+      padding: 11px 10px;
+      vertical-align: middle;
+    }
+
+    th {
+      color: #475467;
+      font-weight: 700;
+      background: var(--surface-alt);
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      font-size: 0.76rem;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tbody tr {
+      transition: background 0.12s ease;
+    }
+
+    tbody tr:hover {
+      background: #fff8f3;
+    }
+
+    .table-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .username-cell {
+      display: grid;
+      gap: 2px;
+    }
+
+    .username-main {
+      font-weight: 700;
+      color: #1f2937;
+      font-size: 0.82rem;
+    }
+
+    .role-select {
+      max-width: 120px;
+    }
+
+    .active-switch {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      user-select: none;
+    }
+
+    .active-switch input {
+      width: 36px;
+      height: 20px;
+      appearance: none;
+      background: #d0d9e4;
+      border-radius: 999px;
+      position: relative;
+      transition: background 0.12s ease;
+      cursor: pointer;
+      border: none;
+      padding: 0;
+    }
+
+    .active-switch input::after {
+      content: '';
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #fff;
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      transition: transform 0.12s ease;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.25);
+    }
+
+    .active-switch input:checked {
+      background: #22c55e;
+    }
+
+    .active-switch input:checked::after {
+      transform: translateX(16px);
+    }
+
+    .active-label {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #475467;
+      min-width: 40px;
+    }
+
+    .icon-btn {
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      border-radius: 10px;
+      min-height: 32px;
+      box-shadow: none;
+    }
+
+    .icon-btn.btn-danger {
+      width: 34px;
+      height: 34px;
+      min-height: 34px;
+      border-radius: 10px;
+    }
+
+    .icon-btn:hover {
+      transform: translateY(-1px) scale(1.02);
+    }
+
+    .icon-btn svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      pointer-events: none;
+    }
+
+    .icon-btn.btn-danger svg {
+      width: 17px;
+      height: 17px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      padding: 3px 8px;
+      font-size: 0.74rem;
+      font-weight: 700;
+      color: #fff;
+      background: #667085;
+    }
+
+    .status-ingested {
+      background: #067647;
+    }
+
+    .status-failed {
+      background: #b42318;
+    }
+
+    .status-ingesting {
+      background: #175cd3;
+    }
+
+    .status-uploaded {
+      background: #667085;
+    }
+
+    .notice {
+      min-height: 20px;
+      border-radius: 10px;
+      padding: 0;
+      font-size: 0.82rem;
+      font-weight: 600;
+    }
+
+    .notice.error,
+    .notice.ok {
+      padding: 8px 10px;
+    }
+
+    .notice.error {
+      color: var(--danger);
+      background: var(--danger-bg);
+      border: 1px solid #fecdca;
+    }
+
+    .notice.ok {
+      color: var(--ok);
+      background: var(--ok-bg);
+      border: 1px solid #abefc6;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(4px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: var(--fs-xs);
+    }
+
+    .error-inline {
+      margin-top: 4px;
+      color: var(--danger);
+      font-size: 0.76rem;
+    }
+
+    @media (max-width: 1220px) {
+      .stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .title {
+        font-size: 1.16rem;
+      }
+
+      .subtitle {
+        font-size: 0.84rem;
+      }
+
+      .shell {
+        width: calc(100% - 14px);
+      }
+
+      .topbar,
+      .panel {
+        border-radius: 14px;
+        padding: 12px;
+      }
+
+      .grid-2 {
+        grid-template-columns: 1fr;
+      }
+
+      .stats {
+        grid-template-columns: 1fr;
+      }
+
+      table {
+        font-size: 0.84rem;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="title-wrap">
+        <div class="eyebrow">Administration</div>
+        <div class="title">MediLink Admin Dashboard</div>
+        <div class="subtitle">User control and insurance document ingestion operations</div>
+      </div>
+      <div class="actions">
+        <a href="/chat" class="btn btn-muted">Open Chat</a>
+        <form method="POST" action="/logout">
+          <button type="submit" class="btn btn-danger logout-btn">Logout</button>
+        </form>
+      </div>
+    </header>
+
+    <section class="stats" aria-label="Dashboard metrics">
+      <article class="stat">
+        <div class="stat-label">Total Users</div>
+        <div class="stat-value" id="stat-users-total">-</div>
+      </article>
+      <article class="stat">
+        <div class="stat-label">Active Users</div>
+        <div class="stat-value" id="stat-users-active">-</div>
+      </article>
+      <article class="stat">
+        <div class="stat-label">Admin Users</div>
+        <div class="stat-value" id="stat-users-admin">-</div>
+      </article>
+      <article class="stat">
+        <div class="stat-label">Documents</div>
+        <div class="stat-value" id="stat-docs-total">-</div>
+      </article>
+    </section>
+
+    <main class="layout">
+      <section class="panel">
+        <div class="panel-header">
+          <div class="panel-title">User Management</div>
+          <div class="panel-hint">Create local users, assign roles, reset passwords, and control account access.</div>
+        </div>
+
+        <form id="create-user-form">
+          <div class="grid-2">
+            <div class="field">
+              <label for="create-username">Username</label>
+              <input id="create-username" name="username" type="text" maxlength="120" required />
+            </div>
+            <div class="field">
+              <label for="create-role">Role</label>
+              <select id="create-role" name="role">
+                <option value="user">user</option>
+                <option value="admin">admin</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="create-active">Active</label>
+              <select id="create-active" name="isActive">
+                <option value="true">true</option>
+                <option value="false">false</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="create-password">Password</label>
+              <input id="create-password" name="password" type="password" minlength="8" required />
+            </div>
+          </div>
+          <div class="actions" style="margin-top:10px;">
+            <button id="create-user-btn" type="submit" class="btn btn-primary">Create User</button>
+          </div>
+        </form>
+
+        <div id="users-notice" class="notice" aria-live="polite"></div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Username</th>
+                <th>Auth</th>
+                <th>Role</th>
+                <th>Active</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="users-table-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <div class="panel-title">Document Ingestion</div>
+          <div class="panel-hint">Upload PDF, CSV, or XLSX files and trigger ingestion workflow.</div>
+        </div>
+
+        <form id="upload-form" enctype="multipart/form-data">
+          <div class="field">
+            <label for="pdf-file">PDF, CSV, or XLSX files</label>
+            <input id="pdf-file" type="file" accept="application/pdf,.pdf,text/csv,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xlsx" multiple required />
+          </div>
+          <div class="actions" style="margin-top:8px;">
+            <button id="upload-doc-btn" type="submit" class="btn btn-primary">Upload and Ingest</button>
+          </div>
+        </form>
+
+        <div id="docs-notice" class="notice" aria-live="polite"></div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Sr.</th>
+                <th>File</th>
+                <th>Status</th>
+                <th>Reference</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="docs-table-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const usersBody = document.getElementById('users-table-body');
+    const docsBody = document.getElementById('docs-table-body');
+    const usersNotice = document.getElementById('users-notice');
+    const docsNotice = document.getElementById('docs-notice');
+    const createUserBtn = document.getElementById('create-user-btn');
+    const uploadDocBtn = document.getElementById('upload-doc-btn');
+
+    function esc(value) {
+      return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function setBusy(button, busy, label) {
+      if (!button) return;
+      button.disabled = busy;
+      if (label) {
+        button.textContent = busy ? `${label}...` : label;
+      }
+    }
+
+    function setNotice(el, text, type) {
+      el.textContent = text || '';
+      el.className = 'notice';
+      if (type === 'error') el.classList.add('error');
+      if (type === 'ok') el.classList.add('ok');
+    }
+
+    async function api(url, options = {}) {
+      const headers = { ...(options.headers || {}) };
+      if (!(options.body instanceof FormData)) {
+        headers['Content-Type'] = 'application/json';
+      }
+
+      const res = await fetch(url, {
+        ...options,
+        headers
+      });
+
+      if (!res.ok) {
+        if (res.status === 401) {
+          window.location.href = '/admin/login';
+          throw new Error('unauthorized');
+        }
+
+        let message = 'Request failed';
+        try {
+          const body = await res.json();
+          message = body.detail || body.error || message;
+        } catch (e) {
+          message = res.statusText || message;
+        }
+        throw new Error(message);
+      }
+
+      if (res.status === 204) return {};
+      return res.json();
+    }
+
+    function updateStats(users, documents) {
+      const totalUsers = users.length;
+      const activeUsers = users.filter((u) => u.isActive).length;
+      const adminUsers = users.filter((u) => u.role === 'admin').length;
+      const totalDocs = documents.length;
+
+      document.getElementById('stat-users-total').textContent = String(totalUsers);
+      document.getElementById('stat-users-active').textContent = String(activeUsers);
+      document.getElementById('stat-users-admin').textContent = String(adminUsers);
+      document.getElementById('stat-docs-total').textContent = String(totalDocs);
+    }
+
+    function renderUsers(users) {
+      usersBody.innerHTML = '';
+
+      if (!users.length) {
+        usersBody.innerHTML = '<tr><td colspan="5" class="muted">No users found</td></tr>';
+        return;
+      }
+
+      for (const u of users) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>
+            <input data-edit="username" data-id="${esc(u.id)}" value="${esc(u.username)}" />
+          </td>
+          <td>
+            <div class="username-cell">
+              <span class="badge">${esc(u.authProvider || 'local')}</span>
+              <input data-edit="password" data-id="${esc(u.id)}" type="password" placeholder="New password" />
+            </div>
+          </td>
+          <td>
+            <select class="role-select" data-edit="role" data-id="${esc(u.id)}">
+              <option value="user" ${u.role === 'user' ? 'selected' : ''}>user</option>
+              <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>admin</option>
+            </select>
+          </td>
+          <td>
+            <label class="active-switch">
+              <input type="checkbox" data-edit="isActive" data-id="${esc(u.id)}" ${u.isActive ? 'checked' : ''} />
+              <span class="active-label">${u.isActive ? 'Active' : 'Inactive'}</span>
+            </label>
+          </td>
+          <td>
+            <div class="table-actions">
+              <button class="btn btn-primary icon-btn" data-action="save" data-id="${esc(u.id)}" title="Save" aria-label="Save">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><path d="M17 21v-8H7v8"></path><path d="M7 3v5h8"></path></svg>
+              </button>
+              <button class="btn btn-danger icon-btn" data-action="delete" data-id="${esc(u.id)}" title="Delete" aria-label="Delete">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M19 6l-1 14H6L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>
+              </button>
+            </div>
+          </td>
+        `;
+        usersBody.appendChild(tr);
+      }
+
+      usersBody.querySelectorAll('input[data-edit="isActive"]').forEach((input) => {
+        input.addEventListener('change', (e) => {
+          const label = e.target.closest('.active-switch')?.querySelector('.active-label');
+          if (label) {
+            label.textContent = e.target.checked ? 'Active' : 'Inactive';
+          }
+        });
+      });
+    }
+
+    function statusBadge(status) {
+      const safe = esc(status || 'uploaded');
+      const cls = `badge status-${safe}`;
+      return `<span class="${cls}">${safe}</span>`;
+    }
+
+    function renderDocs(documents) {
+      docsBody.innerHTML = '';
+
+      if (!documents.length) {
+        docsBody.innerHTML = '<tr><td colspan="5" class="muted">No documents uploaded</td></tr>';
+        return;
+      }
+
+      for (const [index, d] of documents.entries()) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${esc(index + 1)}</td>
+          <td title="${esc(d.original_name)}">${esc(d.original_name)}</td>
+          <td>${statusBadge(d.status)}</td>
+          <td>${esc(d.flowise_reference || '-')}</td>
+          <td>
+            <div class="table-actions">
+              <button class="btn btn-danger icon-btn" data-doc-action="delete" data-id="${esc(d.id)}" title="Delete Document" aria-label="Delete Document">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M19 6l-1 14H6L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>
+              </button>
+            </div>
+            ${d.error_message ? `<div class="error-inline">${esc(d.error_message)}</div>` : ''}
+          </td>
+        `;
+        docsBody.appendChild(tr);
+      }
+    }
+
+    async function loadUsers() {
+      const data = await api('/api/admin/users');
+      return data.users || [];
+    }
+
+    async function loadDocs() {
+      const data = await api('/api/admin/documents');
+      return data.documents || [];
+    }
+
+    async function refreshAll() {
+      const [users, documents] = await Promise.all([loadUsers(), loadDocs()]);
+      renderUsers(users);
+      renderDocs(documents);
+      updateStats(users, documents);
+    }
+
+    document.getElementById('create-user-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      setNotice(usersNotice, '', '');
+      setBusy(createUserBtn, true, 'Create User');
+
+      const payload = {
+        username: document.getElementById('create-username').value.trim(),
+        password: document.getElementById('create-password').value,
+        role: document.getElementById('create-role').value,
+        isActive: document.getElementById('create-active').value === 'true'
+      };
+
+      try {
+        await api('/api/admin/users', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        e.target.reset();
+        await refreshAll();
+        setNotice(usersNotice, 'User created successfully.', 'ok');
+      } catch (err) {
+        setNotice(usersNotice, err.message, 'error');
+      } finally {
+        setBusy(createUserBtn, false, 'Create User');
+      }
+    });
+
+    usersBody.addEventListener('click', async (e) => {
+      const target = e.target.closest('button[data-action]');
+      if (!target) return;
+      const action = target.getAttribute('data-action');
+      const id = Number(target.getAttribute('data-id'));
+      if (!action || !id) return;
+
+      setNotice(usersNotice, '', '');
+      target.disabled = true;
+
+      try {
+        if (action === 'delete') {
+          const confirmed = window.confirm('Delete this user?');
+          if (!confirmed) return;
+          await api(`/api/admin/users/${id}`, { method: 'DELETE' });
+          await refreshAll();
+          setNotice(usersNotice, 'User deleted.', 'ok');
+          return;
+        }
+
+        if (action === 'save') {
+          const usernameEl = usersBody.querySelector(`input[data-edit="username"][data-id="${id}"]`);
+          const passwordEl = usersBody.querySelector(`input[data-edit="password"][data-id="${id}"]`);
+          const roleEl = usersBody.querySelector(`select[data-edit="role"][data-id="${id}"]`);
+          const activeEl = usersBody.querySelector(`input[data-edit="isActive"][data-id="${id}"]`);
+
+          await api(`/api/admin/users/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              username: usernameEl.value.trim(),
+              password: passwordEl.value,
+              role: roleEl.value,
+              isActive: Boolean(activeEl.checked)
+            })
+          });
+
+          await refreshAll();
+        setNotice(usersNotice, 'User updated.', 'ok');
+        }
+      } catch (err) {
+        setNotice(usersNotice, err.message, 'error');
+      } finally {
+        target.disabled = false;
+      }
+    });
+
+    document.getElementById('upload-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      setNotice(docsNotice, '', '');
+      setBusy(uploadDocBtn, true, 'Uploading');
+
+      const fileInput = document.getElementById('pdf-file');
+      const files = Array.from(fileInput.files);
+      
+      if (files.length === 0) {
+        setNotice(docsNotice, 'Please select one or more PDF, CSV, or XLSX files.', 'error');
+        setBusy(uploadDocBtn, false, 'Upload and Ingest');
+        return;
+      }
+
+      let successCount = 0;
+      let errorMessages = [];
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        setBusy(uploadDocBtn, true, `Uploading (${i + 1}/${files.length})`);
+        
+        const fd = new FormData();
+        fd.append('file', file);
+
+        try {
+          await api('/api/admin/documents/upload', {
+            method: 'POST',
+            body: fd
+          });
+          successCount++;
+        } catch (err) {
+          console.error(`Failed to upload ${file.name}:`, err);
+          errorMessages.push(`${file.name}: ${err.message}`);
+        }
+      }
+
+      fileInput.value = '';
+      await refreshAll();
+
+      if (errorMessages.length > 0) {
+        setNotice(docsNotice, `Uploaded ${successCount} files. Errors: ${errorMessages.join('; ')}`, 'error');
+      } else {
+        setNotice(docsNotice, `Successfully uploaded ${successCount} file(s). Ingestion is running.`, 'ok');
+      }
+      
+      setBusy(uploadDocBtn, false, 'Upload and Ingest');
+    });
+
+    docsBody.addEventListener('click', async (e) => {
+      const target = e.target.closest('button[data-doc-action]');
+      if (!target) return;
+      const action = target.getAttribute('data-doc-action');
+      const id = Number(target.getAttribute('data-id'));
+      if (action !== 'delete' || !id) return;
+
+      setNotice(docsNotice, '', '');
+      target.disabled = true;
+
+      try {
+        const confirmed = window.confirm('Delete this document from saved storage?');
+        if (!confirmed) return;
+        await api(`/api/admin/documents/${id}`, { method: 'DELETE' });
+        await refreshAll();
+        setNotice(docsNotice, 'Document deleted from storage.', 'ok');
+      } catch (err) {
+        await refreshAll();
+        setNotice(docsNotice, err.message, 'error');
+      } finally {
+        target.disabled = false;
+      }
+    });
+
+    async function initialize() {
+      try {
+        const me = await api('/api/me');
+        if (me.role !== 'admin') {
+          window.location.href = '/';
+          return;
+        }
+        await refreshAll();
+      } catch (err) {
+        window.location.href = '/admin/login';
+      }
+    }
+
+    initialize();
+  </script>
+</body>
+
+</html>

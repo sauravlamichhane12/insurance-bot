@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>MediLink Insurance Sign In</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+
+    :root {
+      --sky-50: #f0f9ff;
+      --sky-100: #e0f2fe;
+      --sky-300: #7dd3fc;
+      --sky-500: #0ea5e9;
+      --sky-600: #0284c7;
+      --sky-700: #0369a1;
+      --panel: rgba(255, 255, 255, 0.96);
+      --panel-border: rgba(2, 132, 199, 0.12);
+      --text-main: #082f49;
+      --text-soft: #4b6b80;
+      --danger-fg: #9f1239;
+      --danger-bg: #fff1f2;
+      --danger-bd: #fecdd3;
+      --focus-ring: 0 0 0 3px rgba(14, 165, 233, 0.18);
+      --shadow-xl: 0 30px 58px rgba(8, 47, 73, 0.14);
+      --shadow-md: 0 12px 24px rgba(8, 47, 73, 0.08);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+
+    body {
+      font-family: 'Manrope', sans-serif;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background:
+        radial-gradient(900px 500px at 100% -10%, rgba(14, 165, 233, 0.14), transparent 55%),
+        radial-gradient(1000px 650px at -10% 100%, rgba(125, 211, 252, 0.16), transparent 60%),
+        linear-gradient(180deg, #f8fdff, #eef8fd 55%, #e0f2fe);
+    }
+
+    .login-container { width: 100%; max-width: 560px; padding: 28px 16px; }
+
+    .login-card {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 28px;
+      box-shadow: var(--shadow-xl);
+      padding: 48px 40px 36px;
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+      text-align: center;
+    }
+
+    .logo-placeholder {
+      width: 100px;
+      height: 100px;
+      border-radius: 24px;
+      background: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      margin: -80px auto 8px;
+      border: 1px solid rgba(2, 132, 199, 0.12);
+      box-shadow: var(--shadow-md);
+    }
+
+    .login-logo { width: 82%; height: 82%; object-fit: contain; }
+    .login-title { font-size: 1.8rem; font-weight: 800; color: var(--sky-700); }
+    .login-subtitle { font-size: 1rem; line-height: 1.6; color: var(--text-soft); max-width: 420px; margin: 0 auto; }
+
+    .login-error {
+      display: none;
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: var(--danger-fg);
+      background: var(--danger-bg);
+      border: 1px solid var(--danger-bd);
+      border-radius: 14px;
+      padding: 12px 16px;
+      text-align: left;
+    }
+
+    form { display: grid; gap: 14px; text-align: left; }
+    label { font-size: 0.84rem; font-weight: 700; color: var(--text-soft); }
+
+    input {
+      width: 100%;
+      border: 1px solid rgba(2, 132, 199, 0.16);
+      border-radius: 16px;
+      padding: 14px 16px;
+      font: inherit;
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.98);
+      outline: none;
+    }
+
+    input:focus { border-color: var(--sky-500); box-shadow: var(--focus-ring); }
+    .field { display: grid; gap: 7px; }
+
+    .login-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      border: none;
+      border-radius: 18px;
+      padding: 16px 20px;
+      background: linear-gradient(135deg, var(--sky-500), var(--sky-600));
+      color: #fff;
+      font-size: 1.02rem;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 10px 20px rgba(2, 132, 199, 0.22);
+    }
+
+    .login-button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+    .login-footnote { color: var(--text-soft); font-size: 0.88rem; line-height: 1.5; }
+    .login-footnote a { color: var(--sky-600); font-weight: 700; text-decoration: none; }
+
+    @media (max-width: 600px) {
+      .login-card { padding: 40px 24px 28px; }
+      .logo-placeholder { width: 88px; height: 88px; margin-top: -72px; }
+      .login-title { font-size: 1.5rem; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="login-container">
+    <div class="login-card">
+      <div class="logo-placeholder">
+        <img src="/medilink_logo.svg" alt="MediLink Insurance Logo" class="login-logo">
+      </div>
+      <div>
+        <div class="login-title">MediLink Member Sign In</div>
+        <div class="login-subtitle">
+          Sign in with your application account to ask questions about uploaded benefits, limits, coverage details, and policy documents.
+        </div>
+      </div>
+
+      <div id="error-box" class="login-error"></div>
+
+      <form method="POST" action="/login">
+        <input type="hidden" name="next" value="/chat" />
+        <div class="field">
+          <label for="username">Username</label>
+          <input id="username" name="username" type="text" autocomplete="username" required />
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" required />
+        </div>
+        <button class="login-button" type="submit">Sign In to Chat</button>
+      </form>
+
+      <div class="login-footnote">
+        Need admin access? <a href="/admin/login">Admin sign-in</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const errorBox = document.getElementById('error-box');
+    const messages = {
+      invalid: 'The username or password is incorrect.',
+      inactive: 'Your account is inactive. Contact an administrator.',
+      admin: 'Your account does not currently have administrator access.'
+    };
+
+    const error = params.get('error');
+    if (error && errorBox) {
+      errorBox.textContent = messages[error] || 'Sign-in failed. Please try again.';
+      errorBox.style.display = 'block';
+    }
+  </script>
+</body>
+
+</html>
