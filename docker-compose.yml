@@ -1,0 +1,26 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: medilink-app
+
+    ports:
+      - "${HOST_PORT:-8000}:8000"
+
+    env_file:
+      - .env
+
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PORT=8000
+
+    volumes:
+      - app_data:/app/data
+      - ./uploads:/app/uploads
+
+    restart: unless-stopped
+
+volumes:
+  app_data:
