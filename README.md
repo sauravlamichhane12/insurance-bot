@@ -85,14 +85,14 @@ cp .env.example .env
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 8001
 ```
 
 ### 3. Docker Installation
 ```bash
 docker compose up --build
 ```
-Access the application at `http://localhost:8000`.
+Access the application at `http://localhost:8001`.
 
 ---
 

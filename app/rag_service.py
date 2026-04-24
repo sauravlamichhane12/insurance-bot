@@ -11,7 +11,7 @@ from typing import Any
 
 import bcrypt
 from langchain.agents import create_agent
-from langchain.agents.middleware import ModelCallLimitMiddleware, SummarizationMiddleware
+from langchain.agents.middleware import ModelCallLimitMiddleware
 from langchain_core.documents import Document
 from langchain_core.tools import tool
 from langchain_aws import BedrockEmbeddings, ChatBedrockConverse
@@ -25,7 +25,6 @@ from pinecone import Pinecone
 from pypdf import PdfReader
 
 from .db import CHECKPOINT_DB_PATH, ensure_dirs, fetch_one
-from .token_usage_suite import build_reduced_context, load_csv_sheet_rows, should_use_structured_lookup
 
 try:
     from langgraph.checkpoint.sqlite import SqliteSaver
@@ -34,15 +33,6 @@ except ImportError:  # pragma: no cover - depends on optional package availabili
 
 
 ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_BENEFITS_CSV = ROOT / "Health Benefits (Peso Plans)(Sheet1).csv"
-STRUCTURED_LOOKUP_SYSTEM_PROMPT = (
-    "Answer only from the provided Health Benefits CSV rows. "
-    "Be concise, factual, and grounded in the provided rows only. "
-    "If a requested item is missing or blank in the rows, say that clearly. "
-    "Prefer one short paragraph, or at most two. "
-    "Do not use headings, bullets, tables, citations, or preambles. "
-    "Start with the answer and explain any caps or as-charged items plainly."
-)
 
 
 def _trim(value: str | None, fallback: str = "") -> str:
@@ -330,31 +320,16 @@ class RAGService:
             aws_secret_access_key=config.aws_secret_access_key,
         )
         self.agent = self._build_agent()
-        self.structured_lookup_agent = create_agent(
-            model=self.chat_model,
-            tools=[],
-            system_prompt=STRUCTURED_LOOKUP_SYSTEM_PROMPT,
-        )
-        self.benefits_csv_rows = self._load_benefits_csv_rows()
-
-    def _load_benefits_csv_rows(self) -> list[dict[str, str]]:
-        if not DEFAULT_BENEFITS_CSV.exists():
-            return []
-        try:
-            return load_csv_sheet_rows(DEFAULT_BENEFITS_CSV)
-        except Exception as exc:
-            print(f"Structured benefits CSV load failed: {_trim(str(exc), 'unknown error')}")
-            return []
 
     def _build_agent(self):
         @tool
-        def retrieve_document_context(query: str, document_id: str | None = None, max_results: int = 3) -> str:
-            """Retrieve the most relevant passages from the Pinecone index for a user question."""
+        def retrieve_document_context(query: str, document_id: str | None = None, max_results: int = 2) -> str:
+            """Retrieve only the minimum document context needed to answer the question."""
             metadata_filter = None
             if document_id:
                 metadata_filter = {"document_id": {"$eq": str(document_id)}}
             query_lower = query.lower()
-            suggested_max = 4 if any(marker in query_lower for marker in (" and ", " compare", " both ", " which ", ",")) else 2
+            suggested_max = 2 if any(marker in query_lower for marker in (" and ", " compare", " both ", " which ", ",")) else 1
             results = self.vector_store.similarity_search_with_score(
                 query,
                 k=min(max_results, suggested_max),
@@ -365,7 +340,7 @@ class RAGService:
 
             lines: list[str] = []
             current_total_chars = 0
-            MAX_TOTAL_CHARS = 1500
+            max_total_chars = 900
             
             for rank, (doc, _score) in enumerate(results, start=1):
                 meta = doc.metadata or {}
@@ -376,9 +351,8 @@ class RAGService:
                     header += f" row/page {page}"
                 
                 content = doc.page_content.strip()
-                # If adding this chunk exceeds our total limit, we truncate it or stop
-                if current_total_chars + len(content) > MAX_TOTAL_CHARS:
-                    remaining_budget = MAX_TOTAL_CHARS - current_total_chars
+                if current_total_chars + len(content) > max_total_chars:
+                    remaining_budget = max_total_chars - current_total_chars
                     if remaining_budget > 50:
                         lines.append(f"{header}: {content[:remaining_budget].rstrip()}...")
                     break
@@ -393,17 +367,15 @@ class RAGService:
             tools=[retrieve_document_context],
             checkpointer=self.checkpointer,
             middleware=[
-                SummarizationMiddleware(self.chat_model, trigger=("tokens", 3000), keep=("messages", 4)),
-                ModelCallLimitMiddleware(run_limit=4, exit_behavior="end"),
+                ModelCallLimitMiddleware(run_limit=3, exit_behavior="end"),
             ],
             system_prompt=(
-                "Answer using only MediLink insurance docs. "
-                "Use retrieve_document_context for details. "
-                "If missing, state it's not found. "
-                "Reply as insurance support. Concise, factual, conversational. "
-                "1-2 short paragraphs max. "
-                "No headings, bullets, tables, bold, citations, page numbers, or preambles. "
-                "Explain limits simply. Start with the answer."
+                "Answer using only MediLink insurance documents. "
+                "Use retrieve_document_context once unless the first retrieval is clearly insufficient. "
+                "If the answer is not in the documents, say so. "
+                "Reply in one short paragraph or two very short paragraphs. "
+                "Do not use headings, bullets, tables, markdown formatting, or preambles. "
+                "Start with the answer and explain limits plainly."
             ),
         )
 
@@ -692,12 +664,6 @@ class RAGService:
         history: list[dict[str, str]] | None = None,
         thread_id: str | None = None,
     ):
-        if self.should_route_to_structured_lookup(question):
-            answer = self.structured_lookup_answer(question, history=history)
-            for chunk in _chunk_text(answer, size=120):
-                yield chunk, {}
-            return
-
         messages = self._prepare_messages(question, history, thread_id=thread_id)
         emitted_text = False
         config: dict[str, Any] | None = None
@@ -732,49 +698,11 @@ class RAGService:
         history: list[dict[str, str]] | None = None,
         thread_id: str | None = None,
     ) -> str:
-        if self.should_route_to_structured_lookup(question):
-            return self.structured_lookup_answer(question, history=history)
-
         messages = self._prepare_messages(question, history, thread_id=thread_id)
         config: dict[str, Any] | None = None
         if thread_id:
             config = {"configurable": {"thread_id": thread_id}}
         result = self.agent.invoke({"messages": messages}, config=config)
-
-        if isinstance(result, dict):
-            response_messages = result.get("messages") or []
-            for message in reversed(response_messages):
-                if not _is_assistant_message(message):
-                    continue
-                content = _extract_text_blocks(message).strip()
-                if content:
-                    return content
-            content = result.get("output")
-            if isinstance(content, str) and content.strip():
-                return content.strip()
-        return _extract_text_blocks(result).strip() if result is not None else ""
-
-    def should_route_to_structured_lookup(self, question: str) -> bool:
-        return should_use_structured_lookup(question, self.benefits_csv_rows)
-
-    def structured_lookup_answer(self, question: str, history: list[dict[str, str]] | None = None) -> str:
-        reduced_context = build_reduced_context(question, self.benefits_csv_rows, max_rows=6)
-        messages = self._prepare_messages(question, history)
-        
-        # We need to inject the CSV context into the system prompt or the last user message.
-        # Given how _prepare_messages works, the last message is {"role": "user", "content": question}.
-        # We'll replace it with one that includes context.
-        if messages and messages[-1]["role"] == "user":
-            prompt = (
-                "Use only the following rows from the Health Benefits CSV.\n\n"
-                f"{reduced_context}\n\n"
-                f"Question: {messages[-1]['content']}"
-            )
-            messages[-1]["content"] = prompt
-
-        result = self.structured_lookup_agent.invoke(
-            {"messages": messages},
-        )
 
         if isinstance(result, dict):
             response_messages = result.get("messages") or []

@@ -47,10 +47,10 @@ def parse_positive_int_env(name: str, fallback: int) -> int:
         return fallback
 
 
-PORT = int(os.getenv("PORT", "8000"))
+PORT = int(os.getenv("PORT", "8001"))
 APP_ENV = (os.getenv("APP_ENV") or "development").strip().lower()
 IS_PRODUCTION = APP_ENV == "production"
-ALLOWED_ORIGINS = parse_csv_env("ALLOWED_ORIGINS", ["http://localhost:8000", "http://127.0.0.1:8000"])
+ALLOWED_ORIGINS = parse_csv_env("ALLOWED_ORIGINS", ["http://localhost:8001", "http://127.0.0.1:8001"])
 MAX_UPLOAD_BYTES = parse_positive_int_env("MAX_UPLOAD_BYTES", 25 * 1024 * 1024)
 AUTH_USERNAME = (os.getenv("AUTH_USERNAME") or "").strip()
 AUTH_PASSWORD = os.getenv("AUTH_PASSWORD") or ""
