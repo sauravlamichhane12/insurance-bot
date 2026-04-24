@@ -7,14 +7,13 @@ services:
     container_name: medilink-app
 
     ports:
-      - "${HOST_PORT:-8000}:8000"
+      - "${PORT:-8001}:${PORT:-8001}"
 
     env_file:
       - .env
 
     environment:
       - PYTHONUNBUFFERED=1
-      - PORT=8000
 
     volumes:
       - app_data:/app/data

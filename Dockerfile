@@ -4,7 +4,7 @@ FROM python:3.11-slim
 # 2. Set environment settings to keep Python fast and quiet
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PORT=8000
+    PORT=8001
 
 # 3. Create and go to the /app folder
 WORKDIR /app
@@ -22,8 +22,8 @@ COPY . .
 # 7. Create folders for your database and PDF uploads
 RUN mkdir -p /app/data /app/uploads/pdfs
 
-# 8. Open Port 8000 for your browser
-EXPOSE 8000
+# 8. Open Port 8001 for your browser
+EXPOSE 8001
 
 # 9. Start the server
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8001}"]
