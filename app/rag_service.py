@@ -11,6 +11,7 @@ from typing import Any
 
 import bcrypt
 from langchain.agents import create_agent
+from langchain.agents.middleware import ModelCallLimitMiddleware, SummarizationMiddleware
 from langchain_core.documents import Document
 from langchain_core.tools import tool
 from langchain_aws import BedrockEmbeddings, ChatBedrockConverse
@@ -24,11 +25,24 @@ from pinecone import Pinecone
 from pypdf import PdfReader
 
 from .db import CHECKPOINT_DB_PATH, ensure_dirs, fetch_one
+from .token_usage_suite import build_reduced_context, load_csv_sheet_rows, should_use_structured_lookup
 
 try:
     from langgraph.checkpoint.sqlite import SqliteSaver
 except ImportError:  # pragma: no cover - depends on optional package availability
     SqliteSaver = None
+
+
+ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_BENEFITS_CSV = ROOT / "Health Benefits (Peso Plans)(Sheet1).csv"
+STRUCTURED_LOOKUP_SYSTEM_PROMPT = (
+    "Answer only from the provided Health Benefits CSV rows. "
+    "Be concise, factual, and grounded in the provided rows only. "
+    "If a requested item is missing or blank in the rows, say that clearly. "
+    "Prefer one short paragraph, or at most two. "
+    "Do not use headings, bullets, tables, citations, or preambles. "
+    "Start with the answer and explain any caps or as-charged items plainly."
+)
 
 
 def _trim(value: str | None, fallback: str = "") -> str:
@@ -125,12 +139,20 @@ def _chunk_text(text: str, size: int = 120) -> list[str]:
     return chunks
 
 
+def _estimate_tokens(text: str) -> int:
+    """Estimate token count using the standard 1 token ~= 4 chars heuristic for English."""
+    return math.ceil(len(text) / 4)
+
+
 def _build_chat_messages(question: str, history: list[dict[str, str]] | None = None) -> list[dict[str, str]]:
     messages: list[dict[str, str]] = []
-    for item in history or []:
+    trimmed_history = (history or [])[-4:]
+    for item in trimmed_history:
         role = _normalize_chat_role(item.get("role"))
         content = (item.get("content") or "").strip()
         if role and content:
+            if len(content) > 600:
+                content = f"{content[:597].rstrip()}..."
             messages.append({"role": role, "content": content})
     messages.append({"role": "user", "content": question})
     return messages
@@ -269,7 +291,7 @@ class RAGConfig:
     bedrock_evaluator_model_id: str
     bedrock_embedding_model_id: str
     semantic_max_chars: int = 1200
-    top_k: int = 5
+    top_k: int = 3
 
 
 class RAGService:
@@ -308,57 +330,80 @@ class RAGService:
             aws_secret_access_key=config.aws_secret_access_key,
         )
         self.agent = self._build_agent()
+        self.structured_lookup_agent = create_agent(
+            model=self.chat_model,
+            tools=[],
+            system_prompt=STRUCTURED_LOOKUP_SYSTEM_PROMPT,
+        )
+        self.benefits_csv_rows = self._load_benefits_csv_rows()
+
+    def _load_benefits_csv_rows(self) -> list[dict[str, str]]:
+        if not DEFAULT_BENEFITS_CSV.exists():
+            return []
+        try:
+            return load_csv_sheet_rows(DEFAULT_BENEFITS_CSV)
+        except Exception as exc:
+            print(f"Structured benefits CSV load failed: {_trim(str(exc), 'unknown error')}")
+            return []
 
     def _build_agent(self):
         @tool
-        def retrieve_document_context(query: str, document_id: str | None = None, max_results: int = 4) -> str:
+        def retrieve_document_context(query: str, document_id: str | None = None, max_results: int = 3) -> str:
             """Retrieve the most relevant passages from the Pinecone index for a user question."""
             metadata_filter = None
             if document_id:
                 metadata_filter = {"document_id": {"$eq": str(document_id)}}
+            query_lower = query.lower()
+            suggested_max = 4 if any(marker in query_lower for marker in (" and ", " compare", " both ", " which ", ",")) else 2
             results = self.vector_store.similarity_search_with_score(
                 query,
-                k=max_results,
+                k=min(max_results, suggested_max),
                 filter=metadata_filter,
             )
             if not results:
                 return "No relevant passages were found in the uploaded documents."
 
             lines: list[str] = []
-            for rank, (doc, score) in enumerate(results, start=1):
+            current_total_chars = 0
+            MAX_TOTAL_CHARS = 1500
+            
+            for rank, (doc, _score) in enumerate(results, start=1):
                 meta = doc.metadata or {}
                 source = meta.get("original_name") or meta.get("source") or "document"
                 page = _safe_page_number(meta.get("page_number") or meta.get("page"))
-                chunk_index = meta.get("chunk_index")
                 header = f"{rank}. {source}"
                 if page is not None:
-                    header += f" p. {page}"
-                if chunk_index is not None:
-                    header += f" chunk {chunk_index}"
-                header += f" [score {score:.4f}]"
-                lines.append(f"{header}\n{doc.page_content.strip()}")
+                    header += f" row/page {page}"
+                
+                content = doc.page_content.strip()
+                # If adding this chunk exceeds our total limit, we truncate it or stop
+                if current_total_chars + len(content) > MAX_TOTAL_CHARS:
+                    remaining_budget = MAX_TOTAL_CHARS - current_total_chars
+                    if remaining_budget > 50:
+                        lines.append(f"{header}: {content[:remaining_budget].rstrip()}...")
+                    break
+                    
+                lines.append(f"{header}: {content}")
+                current_total_chars += len(content)
+                
             return "\n\n".join(lines)
 
         return create_agent(
             model=self.chat_model,
             tools=[retrieve_document_context],
             checkpointer=self.checkpointer,
+            middleware=[
+                SummarizationMiddleware(self.chat_model, trigger=("tokens", 3000), keep=("messages", 4)),
+                ModelCallLimitMiddleware(run_limit=4, exit_behavior="end"),
+            ],
             system_prompt=(
-                "You answer only from the uploaded MediLink insurance documents. "
-                "Use the retrieve_document_context tool before answering document-specific questions. "
-                "If the tool does not return relevant context, say you could not find the answer in the uploaded documents. "
-                "Answer like a helpful insurance support representative speaking naturally to a customer. "
-                "Keep the answer concise, factual, conversational, and grounded in the retrieved passages. "
-                "Use plain spoken language, as if replying in a chat conversation with a member. "
-                "Prefer one short paragraph, or at most two short paragraphs. "
-                "Do not use headings, bullet points, numbered lists, markdown tables, or decorative formatting unless the user explicitly asks for that format. "
-                "Do not use bold, italics, emojis, or horizontal rules. "
-                "Explain plan limits in simple terms when possible. "
-                "If the question is broad, summarize the key points first in normal sentences instead of listing every matching benefit. "
-                "Do not append source references, citation brackets, filenames, or page numbers at the end of the answer. "
-                "Do not show tool output, retrieved passages, or hidden reasoning. "
-                "Do not use any introductory phrases or preambles like 'Let me check', 'I will retrieve', or 'Based on the documents'. "
-                "Start your answer immediately with the facts."
+                "Answer using only MediLink insurance docs. "
+                "Use retrieve_document_context for details. "
+                "If missing, state it's not found. "
+                "Reply as insurance support. Concise, factual, conversational. "
+                "1-2 short paragraphs max. "
+                "No headings, bullets, tables, bold, citations, page numbers, or preambles. "
+                "Explain limits simply. Start with the answer."
             ),
         )
 
@@ -612,13 +657,48 @@ class RAGService:
             filter={"document_id": {"$eq": str(document_id)}},
         )
 
+    def _prepare_messages(self, question: str, history: list[dict[str, str]] | None, thread_id: str | None = None) -> list[dict[str, str]]:
+        """
+        Formats history into messages. If thread_id is present, the checkpointer already 
+        handles persistence, so we only pass the new question if possible, or format the 
+        history once if it's the first time.
+        """
+        # If we have a thread ID and the checkpointer is active, LangGraph handles history.
+        # We only need to provide the new message.
+        if thread_id and self.memory_backend == "sqlite":
+            return [{"role": "user", "content": question}]
+
+        if not history:
+            return [{"role": "user", "content": question}]
+
+        messages: list[dict[str, str]] = []
+        # Fallback for stateless calls: take last 10 messages max to prevent initial bloat
+        trimmed_history = history[-10:]
+        
+        for item in trimmed_history:
+            role = _normalize_chat_role(item.get("role"))
+            content = (item.get("content") or "").strip()
+            if role and content:
+                if len(content) > 1000:
+                    content = f"{content[:997].rstrip()}..."
+                messages.append({"role": role, "content": content})
+
+        messages.append({"role": "user", "content": question})
+        return messages
+
     def stream_answer(
         self,
         question: str,
         history: list[dict[str, str]] | None = None,
         thread_id: str | None = None,
     ):
-        messages = _build_chat_messages(question, history)
+        if self.should_route_to_structured_lookup(question):
+            answer = self.structured_lookup_answer(question, history=history)
+            for chunk in _chunk_text(answer, size=120):
+                yield chunk, {}
+            return
+
+        messages = self._prepare_messages(question, history, thread_id=thread_id)
         emitted_text = False
         config: dict[str, Any] | None = None
         if thread_id:
@@ -631,6 +711,9 @@ class RAGService:
                     continue
                 text = _extract_text_blocks(token)
                 if not text:
+                    continue
+                # FILTER: Skip internal summarization leak
+                if "SESSION INTENT" in text or "NEXT STEPS" in text:
                     continue
                 emitted_text = True
                 yield text, metadata
@@ -649,11 +732,49 @@ class RAGService:
         history: list[dict[str, str]] | None = None,
         thread_id: str | None = None,
     ) -> str:
-        messages = _build_chat_messages(question, history)
+        if self.should_route_to_structured_lookup(question):
+            return self.structured_lookup_answer(question, history=history)
+
+        messages = self._prepare_messages(question, history, thread_id=thread_id)
         config: dict[str, Any] | None = None
         if thread_id:
             config = {"configurable": {"thread_id": thread_id}}
         result = self.agent.invoke({"messages": messages}, config=config)
+
+        if isinstance(result, dict):
+            response_messages = result.get("messages") or []
+            for message in reversed(response_messages):
+                if not _is_assistant_message(message):
+                    continue
+                content = _extract_text_blocks(message).strip()
+                if content:
+                    return content
+            content = result.get("output")
+            if isinstance(content, str) and content.strip():
+                return content.strip()
+        return _extract_text_blocks(result).strip() if result is not None else ""
+
+    def should_route_to_structured_lookup(self, question: str) -> bool:
+        return should_use_structured_lookup(question, self.benefits_csv_rows)
+
+    def structured_lookup_answer(self, question: str, history: list[dict[str, str]] | None = None) -> str:
+        reduced_context = build_reduced_context(question, self.benefits_csv_rows, max_rows=6)
+        messages = self._prepare_messages(question, history)
+        
+        # We need to inject the CSV context into the system prompt or the last user message.
+        # Given how _prepare_messages works, the last message is {"role": "user", "content": question}.
+        # We'll replace it with one that includes context.
+        if messages and messages[-1]["role"] == "user":
+            prompt = (
+                "Use only the following rows from the Health Benefits CSV.\n\n"
+                f"{reduced_context}\n\n"
+                f"Question: {messages[-1]['content']}"
+            )
+            messages[-1]["content"] = prompt
+
+        result = self.structured_lookup_agent.invoke(
+            {"messages": messages},
+        )
 
         if isinstance(result, dict):
             response_messages = result.get("messages") or []

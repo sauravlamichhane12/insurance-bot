@@ -1,58 +1,107 @@
-# MediLink Insurance Assistant
+# 🛡️ MediLink Insurance Assistant
 
-MediLink Insurance Assistant is a FastAPI application for insurance document ingestion and document-grounded chat. Admins upload PDF, CSV, or XLSX files, and signed-in users can ask questions against the indexed content.
+[![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
+[![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
+[![AWS](https://img.shields.io/badge/AWS-232F3E?style=for-the-badge&logo=amazon-aws&logoColor=white)](https://aws.amazon.com/)
 
-## Features
+**MediLink Insurance Assistant** is a professional, enterprise-ready AI assistant built to handle insurance document queries. It leverages **FastAPI**, **AWS Bedrock**, and **Pinecone** to provide grounded, secure, and real-time answers based on private insurance policies.
 
-- Local username/password login for users and admins
-- Admin dashboard for user management and document ingestion
-- PDF, CSV, and native XLSX indexing
-- Streaming chat responses over Server-Sent Events
-- SQLite-backed session and user storage
-- Pinecone + AWS Bedrock retrieval pipeline
+---
 
-## Stack
+## 🌟 Key Features
 
-- FastAPI
-- SQLite
-- AWS Bedrock
-- Pinecone
-- LangChain / LangGraph
-- Vanilla HTML, CSS, and JavaScript
+### 👤 User Experience
+- **Grounded Q&A:** Get answers directly from uploaded insurance PDFs and CSVs.
+- **Direct Factual Responses:** Strictly factual answers without conversational preambles or filler.
+- **Real-time Streaming:** Watch answers generate instantly via Server-Sent Events (SSE).
+- **Persistent Memory:** Maintains context using `thread_id` via SQLite checkpointer (LangGraph) for natural follow-up questions.
+- **Secure Login:** Local username/password authentication for both users and administrators.
 
-## Setup
+### 🛠️ Intelligent Document Parsing
+- **Triple-Tier Hybrid PDF Parsing:**
+  - **Structural (Markdownification):** Converts PDF layout to Markdown headers for logical grouping.
+  - **Semantic:** Uses AI embeddings and cosine distance to detect topic changes and split chunks logically.
+  - **Recursive:** Employs layout-aware recursive splitting to preserve sentence and table row integrity.
+- **Granular CSV Indexing:** Every row in a CSV is indexed as a self-contained document to ensure high accuracy for tabular data (e.g., specific coverage or premium lists).
+- **Structured Lookup:** Specialized routing for benefits CSVs with reduced context injection for high-precision queries.
 
+### 🛠️ Admin Capabilities
+- **Document Management:** Upload, re-ingest, or delete insurance policies through a dedicated UI.
+- **Vector Automation:** Automatic text extraction, chunking, and embedding using AWS Bedrock and Pinecone.
+- **User Control:** Manage user roles (Admin/User) and account status.
+
+---
+
+## 🏗️ Technical Stack
+
+- **Backend:** [FastAPI](https://fastapi.tiangolo.com/) (Python)
+- **AI Orchestration:** [LangChain](https://www.langchain.com/) & [LangGraph](https://www.langchain.com/langgraph)
+- **Large Language Model:** [AWS Bedrock](https://aws.amazon.com/bedrock/) (Claude 3.5 Sonnet / Titan Embeddings)
+- **Vector Database:** [Pinecone](https://www.pinecone.io/)
+- **Database:** SQLite (for session, user management, and AI conversation checkpoints)
+- **Frontend:** Vanilla JS / HTML / CSS (Fast and lightweight)
+
+---
+
+## 📂 Project Structure
+
+```text
+├── app/
+│   ├── main.py          # API Routes, Authentication & Admin Logic
+│   ├── rag_service.py   # Advanced PDF/CSV Processing & AI Logic (LangChain/LangGraph)
+│   ├── db.py            # SQLite Database & Directory Helpers
+├── scripts/             # System validation, benchmarks, and test scripts
+├── public/              # Frontend Assets (HTML/JS/CSS)
+├── data/                # Local DB and checkpoint storage
+└── uploads/             # Document upload storage
+```
+
+---
+
+## ⚙️ Setup & Configuration
+
+### Prerequisites
+- Python 3.10+
+- AWS Account (with Bedrock access)
+- Pinecone API Key
+
+### 1. Environment Variables
+Create a `.env` file from the example:
+```bash
+cp .env.example .env
+```
+
+| Variable | Description |
+| :--- | :--- |
+| `SESSION_SECRET` | Secret key for signing session cookies. |
+| `AUTH_USERNAME` | Bootstrap admin username. |
+| `AUTH_PASSWORD` | Bootstrap admin password. |
+| `AWS_*` | Access keys and region for Bedrock. |
+| `PINECONE_*` | API key and Index details for vector storage. |
+
+### 2. Local Installation
 ```bash
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env
 uvicorn app.main:app --reload --port 8000
 ```
 
-Required environment variables:
+### 3. Docker Installation
+```bash
+docker compose up --build
+```
+Access the application at `http://localhost:8000`.
 
-- `SESSION_SECRET`
-- `AWS_ACCESS_KEY_ID`
-- `AWS_SECRET_ACCESS_KEY`
-- `AWS_REGION`
-- `PINECONE_API_KEY`
-- `PINECONE_INDEX` or `PINECONE_INDEX_NAME`
+---
 
-Optional bootstrap admin variables:
+## 🔄 Document Workflow
 
-- `AUTH_USERNAME`
-- `AUTH_PASSWORD`
+1. **Ingestion:** Admin uploads a PDF/CSV -> System applies structural (Markdown) or row-based parsing -> Bedrock generates embeddings.
+2. **Storage:** Chunks and vectors are stored in **Pinecone** under a unique namespace.
+3. **Retrieval:** User asks a question -> System searches Pinecone for relevant context using semantic similarity.
+4. **Generation:** Bedrock (Claude) synthesizes a direct answer based **strictly** on the retrieved context via a LangGraph-orchestrated agent.
 
-## Document Flow
-
-1. Admin uploads a PDF, CSV, or XLSX document.
-2. The app validates and stores the file locally.
-3. The RAG service extracts text or row-level records and indexes them in Pinecone.
-4. Signed-in users ask questions through the chat UI.
-5. The assistant answers from the uploaded MediLink insurance documents only.
-
-## Notes
-
-- XLSX ingestion uses the built-in workbook reader and preserves worksheet order and row sequence.
-- The included `Health Benefits (Peso Plans).xlsx` file is supported directly by the ingestion pipeline.
+---
+*Developed for MediLink Insurance.*

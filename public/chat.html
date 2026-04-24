@@ -117,6 +117,19 @@
       display: flex;
       flex-direction: column;
       gap: 18px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .chat-sidebar::before {
+      content: '';
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 140px;
+      background:
+        radial-gradient(280px 120px at 10% 0%, rgba(14, 165, 233, 0.18), transparent 70%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.48), rgba(255, 255, 255, 0));
+      pointer-events: none;
     }
 
     .chat-logo-container {
@@ -125,6 +138,8 @@
       justify-content: flex-start;
       gap: 14px;
       padding: 2px 2px 0;
+      position: relative;
+      z-index: 1;
     }
 
     .chat-logo-placeholder {
@@ -157,26 +172,28 @@
 
     .chat-new,
     .chat-logout-button {
-      border: none;
       border-radius: 14px;
-      color: #fff;
       font-size: 0.86rem;
       font-weight: 700;
       letter-spacing: -0.01em;
-      padding: 12px 14px;
+      padding: 12px 16px;
       cursor: pointer;
-      transition: transform 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease;
+      transition: transform 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease, border-color 0.16s ease, background 0.16s ease;
     }
 
     .chat-new {
       width: 100%;
-      background: linear-gradient(180deg, #38bdf8, #0ea5e9);
-      box-shadow: 0 10px 22px rgba(14, 165, 233, 0.22);
+      position: relative;
+      z-index: 1;
+      border: 1px solid rgba(3, 105, 161, 0.10);
+      color: #fff;
+      background: linear-gradient(135deg, #0f7bb8, #18a1e0 55%, #44c7f4);
+      box-shadow: 0 14px 30px rgba(14, 165, 233, 0.22);
     }
 
     .chat-new:hover {
       transform: translateY(-1px);
-      box-shadow: 0 14px 26px rgba(14, 165, 233, 0.28);
+      box-shadow: 0 18px 32px rgba(14, 165, 233, 0.28);
     }
 
     .chat-new:focus-visible,
@@ -196,6 +213,8 @@
       letter-spacing: 0.16em;
       padding-left: 4px;
       font-weight: 800;
+      position: relative;
+      z-index: 1;
     }
 
     .chat-history {
@@ -203,6 +222,8 @@
       overflow-y: auto;
       padding-right: 4px;
       font-size: 0.83rem;
+      position: relative;
+      z-index: 1;
     }
 
     #history-list {
@@ -213,31 +234,33 @@
     }
 
     .chat-history-item {
-      padding: 12px 12px;
+      padding: 13px 12px;
       border-radius: var(--radius-sm);
       color: var(--text-soft);
       cursor: pointer;
-      border: 1px solid var(--line);
-      background: rgba(255, 255, 255, 0.74);
-      transition: background 0.14s, border-color 0.14s, color 0.14s, transform 0.14s;
+      border: 1px solid rgba(208, 217, 228, 0.95);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(247, 250, 252, 0.72));
+      transition: background 0.14s, border-color 0.14s, color 0.14s, transform 0.14s, box-shadow 0.14s;
       display: flex;
       align-items: center;
       justify-content: space-between;
       min-height: 48px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
     }
 
     .chat-history-item:hover {
       color: #243245;
       background: #fff;
-      border-color: rgba(34, 48, 71, 0.18);
+      border-color: rgba(14, 165, 233, 0.24);
       transform: translateY(-1px);
+      box-shadow: 0 10px 18px rgba(15, 23, 42, 0.06);
     }
 
     .chat-history-item.active {
       color: #1b2738;
-      border-color: rgba(14, 165, 233, 0.28);
-      background: linear-gradient(180deg, rgba(240, 249, 255, 0.98), rgba(224, 242, 254, 0.98));
-      box-shadow: 0 8px 18px rgba(14, 165, 233, 0.12);
+      border-color: rgba(14, 165, 233, 0.3);
+      background: linear-gradient(180deg, rgba(240, 249, 255, 1), rgba(229, 246, 255, 0.98));
+      box-shadow: 0 12px 24px rgba(14, 165, 233, 0.14);
     }
 
     .chat-history-delete-btn {
@@ -268,17 +291,23 @@
       margin-top: auto;
       padding-top: 12px;
       border-top: 1px solid rgba(15, 23, 42, 0.06);
+      position: relative;
+      z-index: 1;
     }
 
     .chat-logout-button {
       width: 100%;
-      background: linear-gradient(180deg, #f1701b, #d55b0d);
-      box-shadow: 0 10px 22px rgba(197, 85, 8, 0.22);
+      border: 1px solid rgba(190, 24, 93, 0.14);
+      color: #9f1239;
+      background: linear-gradient(135deg, rgba(255, 241, 242, 0.98), rgba(252, 231, 243, 0.96));
+      box-shadow: 0 10px 20px rgba(159, 18, 57, 0.08);
     }
 
     .chat-logout-button:hover {
       transform: translateY(-1px);
-      box-shadow: 0 14px 26px rgba(197, 85, 8, 0.28);
+      border-color: rgba(190, 24, 93, 0.2);
+      background: linear-gradient(135deg, rgba(255, 228, 230, 1), rgba(251, 207, 232, 0.98));
+      box-shadow: 0 12px 22px rgba(159, 18, 57, 0.12);
     }
 
     .chat-main {
@@ -314,6 +343,9 @@
       gap: 12px;
       position: relative;
       z-index: 1;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(250, 252, 255, 0.9)),
+        radial-gradient(320px 140px at 100% 0%, rgba(14, 165, 233, 0.08), transparent 70%);
     }
 
     .chat-header-left {
@@ -347,9 +379,10 @@
       gap: 8px;
       padding: 7px 11px;
       border-radius: 999px;
-      background: rgba(18, 128, 92, 0.08);
+      background: linear-gradient(180deg, rgba(236, 253, 243, 0.9), rgba(244, 255, 248, 0.9));
       border: 1px solid rgba(18, 128, 92, 0.14);
       flex-shrink: 0;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
     }
 
     .chat-header-dot {
@@ -369,10 +402,22 @@
       flex-direction: column;
       gap: 18px;
       background:
-        linear-gradient(180deg, rgba(248, 250, 252, 0.92), rgba(243, 247, 251, 0.8)),
+        linear-gradient(180deg, rgba(249, 251, 253, 0.95), rgba(241, 246, 250, 0.82)),
         radial-gradient(520px 220px at 0% -10%, rgba(31, 58, 94, 0.04), transparent 68%);
       position: relative;
       z-index: 1;
+    }
+
+    .chat-messages::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(148, 163, 184, 0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(148, 163, 184, 0.06) 1px, transparent 1px);
+      background-size: 32px 32px;
+      mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.18), transparent 75%);
+      pointer-events: none;
     }
 
     .chat-message {
@@ -421,15 +466,15 @@
     .chat-bubble {
       padding: 14px 16px;
       border-radius: var(--radius-md);
-      border: 1px solid rgba(15, 23, 42, 0.08);
+      border: 1px solid rgba(15, 23, 42, 0.07);
       color: var(--text-main);
-      box-shadow: var(--shadow-sm);
+      box-shadow: 0 12px 26px rgba(15, 23, 42, 0.07);
       white-space: pre-wrap;
       overflow-wrap: anywhere;
     }
 
     .chat-message.bot .chat-bubble {
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(248, 250, 252, 0.96));
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(247, 250, 252, 0.97));
       white-space: normal;
     }
 
@@ -469,8 +514,8 @@
     .chat-message.user .chat-bubble {
       color: #fff;
       border-color: rgba(3, 105, 161, 0.36);
-      background: linear-gradient(180deg, #38bdf8, #0ea5e9);
-      box-shadow: 0 10px 18px rgba(14, 165, 233, 0.18);
+      background: linear-gradient(135deg, #0f7bb8, #189bd8 52%, #43c2f0);
+      box-shadow: 0 16px 28px rgba(14, 165, 233, 0.2);
     }
 
     .chat-message.bot .chat-bubble h1,
@@ -587,6 +632,9 @@
       position: relative;
       z-index: 1;
       transition: box-shadow 0.18s var(--ease-standard), background 0.18s var(--ease-standard);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.94)),
+        radial-gradient(280px 120px at 0% 100%, rgba(14, 165, 233, 0.06), transparent 70%);
     }
 
     .chat-input-row {
@@ -598,11 +646,16 @@
     .chat-input-wrapper {
       flex: 1;
       position: relative;
+      padding: 8px;
+      border-radius: 22px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(243, 247, 251, 0.92));
+      border: 1px solid rgba(203, 213, 225, 0.85);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92), 0 8px 22px rgba(15, 23, 42, 0.05);
     }
 
     .chat-input-wrapper:focus-within .chat-input {
-      border-color: rgba(14, 165, 233, 0.42);
-      box-shadow: var(--focus-ring);
+      border-color: rgba(14, 165, 233, 0.16);
+      box-shadow: none;
       background: #fff;
     }
 
@@ -611,11 +664,16 @@
       box-shadow: 0 12px 20px rgba(14, 165, 233, 0.24);
     }
 
+    .chat-input-wrapper:focus-within {
+      border-color: rgba(14, 165, 233, 0.35);
+      box-shadow: var(--focus-ring), inset 0 1px 0 rgba(255, 255, 255, 0.94), 0 12px 24px rgba(15, 23, 42, 0.06);
+    }
+
     .chat-input {
       width: 100%;
-      padding: 14px 52px 14px 16px;
+      padding: 15px 56px 15px 16px;
       border-radius: 16px;
-      border: 1px solid var(--line);
+      border: 1px solid transparent;
       background: rgba(255, 255, 255, 0.96);
       color: var(--text-main);
       font-size: 0.92rem;
@@ -629,21 +687,21 @@
     }
 
     .chat-input:focus {
-      border-color: rgba(14, 165, 233, 0.42);
-      box-shadow: var(--focus-ring);
+      border-color: rgba(14, 165, 233, 0.16);
+      box-shadow: none;
       background: #fff;
     }
 
     .chat-send {
       position: absolute;
-      right: 6px;
+      right: 12px;
       top: 50%;
       transform: translateY(-50%);
       border: none;
-      width: 36px;
-      height: 36px;
+      width: 40px;
+      height: 40px;
       border-radius: 12px;
-      background: linear-gradient(180deg, #38bdf8, #0ea5e9);
+      background: linear-gradient(135deg, #0f7bb8, #18a1e0 55%, #44c7f4);
       color: #fff;
       cursor: pointer;
       display: inline-flex;
@@ -652,7 +710,7 @@
       font-size: 1.12rem;
       font-weight: 800;
       line-height: 1;
-      box-shadow: 0 8px 14px rgba(14, 165, 233, 0.20);
+      box-shadow: 0 10px 18px rgba(14, 165, 233, 0.22);
       transition: transform 0.14s ease, box-shadow 0.14s ease, filter 0.14s ease;
     }
 
@@ -836,7 +894,7 @@
         <div class="chat-logo-placeholder">
           <img src="/medilink_logo.svg" alt="MediLink Insurance Logo">
         </div>
-        <div class="chat-logo-text">
+      <div class="chat-logo-text">
           MediLink Insurance Assistant
         </div>
       </div>
@@ -1069,6 +1127,10 @@
       });
 
       if (!res.ok || !res.body) {
+        if (res.status === 401) {
+          window.location.href = '/login';
+          return;
+        }
         const t = await res.text().catch(() => '');
         console.error('Chat stream error:', t || res.status);
         const fallback = 'Sorry, there was an error talking to the MediLink assistant.';
@@ -1185,8 +1247,23 @@
     });
 
     // Initial load: Start a new conversation and render any existing history
-    renderHistoryList();
-    newChatBtn.click(); // Simulate a click to start the first conversation
+    async function initialize() {
+      try {
+        const res = await fetch('/api/me');
+        if (!res.ok) {
+          if (res.status === 401) {
+            window.location.href = '/login';
+            return;
+          }
+        }
+        renderHistoryList();
+        newChatBtn.click(); // Simulate a click to start the first conversation
+      } catch (err) {
+        console.error('Initialization failed:', err);
+      }
+    }
+
+    initialize();
   </script>
 </body>
 

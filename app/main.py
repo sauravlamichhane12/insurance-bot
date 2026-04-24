@@ -265,6 +265,34 @@ def login_user(request: Request, user: dict[str, Any]) -> None:
     execute("UPDATE users SET last_login_at = ?, updated_at = ? WHERE id = ?", (now_iso(), now_iso(), user["id"]))
 
 
+def get_session_user_id(request: Request) -> int | None:
+    session_user = request.session.get("user")
+    if not isinstance(session_user, dict):
+        return None
+
+    user_id = session_user.get("id")
+    try:
+        return int(user_id)
+    except (TypeError, ValueError):
+        return None
+
+
+def resolve_current_user(request: Request) -> dict[str, Any]:
+    user_id = get_session_user_id(request)
+    if not user_id:
+        request.session.clear()
+        raise HTTPException(status_code=401, detail="unauthorized")
+
+    row = fetch_one("SELECT * FROM users WHERE id = ?", (user_id,))
+    if not row or not bool(row["is_active"]):
+        request.session.clear()
+        raise HTTPException(status_code=401, detail="unauthorized")
+
+    user = dict(row)
+    request.session["user"] = {"id": user["id"], "username": user["username"], "role": user["role"]}
+    return user
+
+
 def create_user_record(
     username: str,
     password: str | None,
@@ -371,10 +399,7 @@ def bootstrap_db() -> None:
 
 
 def require_user(request: Request) -> dict[str, Any]:
-    user = request.session.get("user")
-    if not user:
-        raise HTTPException(status_code=401, detail="unauthorized")
-    return user
+    return resolve_current_user(request)
 
 
 def require_admin(request: Request) -> dict[str, Any]:
@@ -385,7 +410,9 @@ def require_admin(request: Request) -> dict[str, Any]:
 
 
 def redirect_if_unauthenticated(request: Request, target: str):
-    if not request.session.get("user"):
+    try:
+        resolve_current_user(request)
+    except HTTPException:
         return RedirectResponse(target, status_code=302)
     return None
 
@@ -507,7 +534,12 @@ def on_startup() -> None:
 
 
 def render_file(name: str):
-    return FileResponse(PUBLIC_DIR / name)
+    response = FileResponse(PUBLIC_DIR / name)
+    # Prevent caching of HTML files to ensure authentication checks are always performed by the server
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 
 @app.get("/health")
@@ -517,9 +549,11 @@ def health():
 
 @app.get("/login")
 def get_login(request: Request):
-    if request.session.get("user"):
-        return RedirectResponse("/", status_code=302)
-    return render_file("login.html")
+    try:
+        resolve_current_user(request)
+    except HTTPException:
+        return render_file("login.html")
+    return RedirectResponse("/", status_code=302)
 
 
 @app.post("/login")
@@ -538,7 +572,10 @@ async def post_login(request: Request, username: str = Form(...), password: str 
 
 @app.get("/admin/login")
 def get_admin_login(request: Request):
-    user = request.session.get("user")
+    try:
+        user = resolve_current_user(request)
+    except HTTPException:
+        return render_file("admin-login.html")
     if user:
         return RedirectResponse("/admin" if user.get("role") == "admin" else "/", status_code=302)
     return render_file("admin-login.html")
@@ -602,10 +639,11 @@ def admin_html_404():
 
 @app.get("/api/me")
 def api_me(request: Request):
-    user = request.session.get("user")
-    if not user:
+    try:
+        user = require_user(request)
+    except HTTPException:
         return JSONResponse({"error": "unauthorized"}, status_code=401)
-    return user
+    return sanitize_user(user)
 
 
 @app.get("/api/admin/users")
@@ -820,8 +858,11 @@ def api_404(path: str):
 @app.get("/{path:path}")
 def static_fallback(path: str):
     if path in {"", "/"}:
-        return render_file("404.html")
+        return RedirectResponse("/chat", status_code=302)
     candidate = PUBLIC_DIR / path
     if candidate.exists() and candidate.is_file():
+        # Prevent direct static access to sensitive HTML files; they must go through defined routes
+        if candidate.suffix.lower() == ".html" and candidate.name not in {"404.html", "login.html", "admin-login.html"}:
+            return render_file("404.html")
         return FileResponse(candidate)
     return render_file("404.html")
