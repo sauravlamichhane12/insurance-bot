@@ -25,7 +25,7 @@ def _resolve_path(env_name: str, fallback: Path) -> Path:
 DATA_DIR = _resolve_path("APP_DATA_DIR", ROOT / "data")
 DB_PATH = _resolve_path("APP_DB_PATH", DATA_DIR / "app.db")
 CHECKPOINT_DB_PATH = _resolve_path("APP_CHECKPOINT_DB_PATH", DATA_DIR / "langgraph_checkpoints.db")
-UPLOAD_DIR = _resolve_path("APP_UPLOADS_DIR", ROOT / "uploads" / "pdfs")
+UPLOAD_DIR = _resolve_path("APP_UPLOADS_DIR", ROOT / "uploads")
 
 
 def ensure_dirs() -> None:

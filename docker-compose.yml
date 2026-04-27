@@ -17,9 +17,10 @@ services:
 
     volumes:
       - app_data:/app/data
-      - ./uploads:/app/uploads
+      - app_uploads:/app/uploads
 
     restart: unless-stopped
 
 volumes:
   app_data:
+  app_uploads:
