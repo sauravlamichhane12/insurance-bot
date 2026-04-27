@@ -47,10 +47,8 @@ def parse_positive_int_env(name: str, fallback: int) -> int:
         return fallback
 
 
-PORT = int(os.getenv("PORT", "8001"))
-APP_ENV = (os.getenv("APP_ENV") or "development").strip().lower()
-IS_PRODUCTION = APP_ENV == "production"
-ALLOWED_ORIGINS = parse_csv_env("ALLOWED_ORIGINS", ["http://localhost:8001", "http://127.0.0.1:8001"])
+IS_PRODUCTION = os.getenv("APP_ENV", "development").strip().lower() == "production"
+ALLOWED_ORIGINS = parse_csv_env("ALLOWED_ORIGINS", ["http://localhost:8001"])
 MAX_UPLOAD_BYTES = parse_positive_int_env("MAX_UPLOAD_BYTES", 25 * 1024 * 1024)
 AUTH_USERNAME = (os.getenv("AUTH_USERNAME") or "").strip()
 AUTH_PASSWORD = os.getenv("AUTH_PASSWORD") or ""
@@ -83,7 +81,7 @@ rag_service: Any | None = None
 rag_service_error: str | None = None
 
 app = FastAPI()
-app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET, same_site="lax", https_only=IS_PRODUCTION, max_age=3600)
+app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET, same_site="lax", https_only=IS_PRODUCTION)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -174,7 +172,6 @@ def get_rag_service():
                 bedrock_evaluator_model_id=BEDROCK_EVALUATOR_MODEL_ID,
                 bedrock_embedding_model_id=BEDROCK_EMBEDDING_MODEL_ID,
                 semantic_max_chars=SEMANTIC_MAX_CHARS,
-                top_k=4,
             )
         )
         rag_service_error = None

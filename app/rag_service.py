@@ -478,7 +478,6 @@ class RAGConfig:
     bedrock_evaluator_model_id: str
     bedrock_embedding_model_id: str
     semantic_max_chars: int = 1200
-    top_k: int = 3
 
 
 class RAGService:
@@ -521,49 +520,83 @@ class RAGService:
     def _build_agent(self):
         @tool
         def retrieve_document_context(query: str, document_id: str | None = None, max_results: int = 4) -> str:
-            """Retrieve only the minimum document context needed to answer the question."""
-            metadata_filter = None
+            """Retrieve the most relevant context using a Hybrid (Semantic + Keyword) search strategy."""
+            # 1. PREPARE FILTERS (Hard Filtering)
+            metadata_filter: dict[str, Any] = {}
             if document_id:
-                metadata_filter = {"document_id": {"$eq": str(document_id)}}
+                metadata_filter["document_id"] = {"$eq": str(document_id)}
 
+            plan_terms = _extract_plan_terms(query)
+            if plan_terms:
+                plan_filters = []
+                for plan in plan_terms:
+                    key = _normalize_metadata_key(plan)
+                    plan_filters.append({key: {"$exists": True}})
+                
+                if len(plan_filters) == 1:
+                    metadata_filter.update(plan_filters[0])
+                elif len(plan_filters) > 1:
+                    metadata_filter["$or"] = plan_filters
+
+            # 2. SEMANTIC SEARCH (Dense Retrieval)
+            # We fetch more candidates than needed (up to 50) so we can rerank them using keyword matches
             is_group_query = _is_grouped_csv_query(query)
-            candidate_count = 24 if is_group_query else max(8, min(max_results * 3, 12))
+            candidate_count = 20 if is_group_query else 15
+
+            
             results = self.vector_store.similarity_search_with_score(
                 query,
                 k=candidate_count,
-                filter=metadata_filter,
+                filter=metadata_filter if metadata_filter else None,
             )
+            
             if not results:
                 return "No relevant passages were found in the uploaded documents."
 
-            csv_rows = [(doc, score) for doc, score in results if _is_csv_metadata_row(doc.metadata or {})]
-            non_csv_rows = [(doc, score) for doc, score in results if not _is_csv_metadata_row(doc.metadata or {})]
+            # 3. HYBRID RERANKING (Applying "Sparse" Keyword Logic)
+            # We split results into CSV and Non-CSV to apply different scoring logic
+            csv_matches = []
+            non_csv_matches = []
+            
+            for doc, vector_score in results:
+                if _is_csv_metadata_row(doc.metadata or {}):
+                    # Keyword boost: exact matches in metadata get a significant score multiplier
+                    keyword_score, row_num = _score_csv_metadata_match(query, doc.metadata or {}, doc.page_content)
+                    # Combined Score = (Semantic Similarity * 10) + Keyword Match Score
+                    hybrid_score = (vector_score * 10.0) + keyword_score
+                    csv_matches.append((hybrid_score, row_num, doc, vector_score, keyword_score))
+                else:
+                    non_csv_matches.append((doc, vector_score))
+
+            # Sort CSV rows by our Hybrid score
+            csv_matches.sort(key=lambda x: (-x[0], x[1])) # High score first, then by row number
+            
+            # 4. GROUPING & SELECTION (Structural Retrieval)
             selected_results: list[tuple[Document, float]]
             retrieval_scope = "partial"
             grouped_benefit_name: str | None = None
-            if csv_rows:
-                scored_csv_rows = [
-                    (_score_csv_metadata_match(query, doc.metadata or {}, doc.page_content), doc, score)
-                    for doc, score in csv_rows
+
+            if csv_matches:
+                # Re-package for grouping: requires ((keyword_score, row_num), doc, vector_score)
+                scored_for_grouping = [
+                    ((m[4], m[1]), m[2], m[3])
+                    for m in csv_matches
                 ]
-                reranked_csv_rows = sorted(
-                    scored_csv_rows,
-                    key=lambda item: (-item[0][0], -item[2], item[0][1]),
-                )
+                
                 selected_results, used_grouping, grouped_benefit_name = _group_csv_rows_by_benefit_name(
                     query,
-                    reranked_csv_rows,
+                    scored_for_grouping,
                     max_results,
                 )
                 retrieval_scope = "complete" if used_grouping else "partial"
+                
+                # If we still have room, add non-CSV semantic results
                 if not used_grouping and len(selected_results) < max_results:
-                    selected_results.extend(non_csv_rows[: max_results - len(selected_results)])
+                    selected_results.extend(non_csv_matches[: max_results - len(selected_results)])
             else:
                 selected_results = results[:max_results]
 
             lines: list[str] = []
-            current_total_chars = 0
-            max_total_chars = 2200 if retrieval_scope == "complete" else 900
             if grouped_benefit_name:
                 lines.append(f"Retrieved benefit group: {grouped_benefit_name}")
                 lines.append(f"Coverage scope: {retrieval_scope}")
@@ -579,14 +612,8 @@ class RAGService:
                 content = doc.page_content.strip()
                 if _is_csv_metadata_row(meta):
                     content = _format_csv_metadata_row(query, meta, content)
-                if current_total_chars + len(content) > max_total_chars:
-                    remaining_budget = max_total_chars - current_total_chars
-                    if remaining_budget > 50:
-                        lines.append(f"{header}: {content[:remaining_budget].rstrip()}...")
-                    break
                     
                 lines.append(f"{header}: {content}")
-                current_total_chars += len(content)
                 
             return "\n\n".join(lines)
 
@@ -598,9 +625,8 @@ class RAGService:
     Answer based only on retrieved context. Do not use outside knowledge or fill gaps with inference.
 
     - Direct match: Answer clearly and precisely.
-    - Partial match: State the answer is limited to the retrieved rows.
-    - No match: Say it is not confirmed by the documents.
-    - Unnamed item: Do not infer coverage from a related category. You may mention the closest retrieved benefit as context only.
+    - No match: If the specific term is not found, say it is not explicitly mentioned in the documents.
+    - Unnamed item: Do not infer coverage from a related category. Do not attempt to categorize items using outside knowledge.
 
     Lists: Present only retrieved line items. If completeness is uncertain, say "the retrieved rows show." Do not add catch-all items.
 
@@ -700,22 +726,13 @@ class RAGService:
                 Document(
                     page_content=content,
                     metadata={
-                        "page_number": row_number,
                         "row_number": row_number,
-                        "section_title": f"CSV row {row_number} of {file_path.name}",
-                        "columns": headers,
-                        "source_name": file_path.name,
                         "source": file_path.name,
                         **{
                             _normalize_metadata_key(headers[index]): normalized_row[index]
                             for index in range(len(headers))
                             if normalized_row[index]
-                        },
-                        **{
-                            f"{_normalize_metadata_key(headers[index])}_norm": _normalize_metadata_key(normalized_row[index]).replace("_", " ")
-                            for index in range(len(headers))
-                            if normalized_row[index]
-                        },
+                        }
                     },
                 )
             )
@@ -853,10 +870,6 @@ class RAGService:
             document_row["stored_path"],
             {
                 "document_id": str(document_row["id"]),
-                "original_name": document_row["original_name"],
-                "stored_name": document_row["stored_name"],
-                "file_path": document_row["stored_path"],
-                "mime_type": document_row["mime_type"],
             },
         )
 
