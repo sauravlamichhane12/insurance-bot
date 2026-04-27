@@ -47,12 +47,17 @@
 - **Vector Database:** [Pinecone](https://www.pinecone.io/)
 - **Database:** SQLite (for session, user management, and AI conversation checkpoints)
 - **Frontend:** Vanilla JS / HTML / CSS (Fast and lightweight)
+- **CI/CD:** [GitHub Actions](https://github.com/features/actions) with Self-hosted Runners
+- **Infrastructure:** Docker & Docker Compose
 
 ---
 
 ## 📂 Project Structure
 
 ```text
+├── .github/
+│   └── workflows/
+│       └── deploy.yml   # CI/CD Pipeline Configuration
 ├── app/
 │   ├── main.py          # API Routes, Authentication & Admin Logic
 │   ├── rag_service.py   # Advanced PDF/CSV Processing & AI Logic (LangChain/LangGraph)
@@ -62,6 +67,38 @@
 ├── data/                # Local DB and checkpoint storage
 └── uploads/             # Document upload storage
 ```
+
+---
+
+## 🌿 Branching Strategy
+
+This project follows a structured branching convention to ensure consistent and organized development.
+
+| Type | Purpose | Lifespan |
+| :--- | :--- | :--- |
+| `main` | Production-ready code | Permanent |
+| `develop` | Integration branch for features | Permanent |
+| `feature/*` | New feature development | Days to weeks |
+| `fix/*` | Bug fixes | Days |
+| `hotfix/*` | Urgent production fixes | Hours to days |
+| `release/*` | Release preparation | Brief |
+
+---
+
+## 🚀 Deployment & Environments
+
+The application is deployed at [medilink.techkraftinc.net](https://medilink.techkraftinc.net).
+
+### CI/CD Pipeline
+The deployment process is fully automated via GitHub Actions:
+1. **Push to main:** Triggers the `.github/workflows/deploy.yml` workflow.
+2. **Self-hosted Runner:** Executes on the production server.
+3. **Docker Orchestration:** Automatically pulls changes, builds images, and restarts containers.
+
+### Production Environment
+- **Path:** `/opt/medilink-insurance-portal/`
+- **Domain:** `medilink.techkraftinc.net`
+- **SSL:** Managed via Nginx reverse proxy and Let's Encrypt.
 
 ---
 
