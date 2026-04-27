@@ -18,13 +18,19 @@
 - **Persistent Memory:** Maintains context using `thread_id` via SQLite checkpointer (LangGraph) for natural follow-up questions.
 - **Secure Login:** Local username/password authentication for both users and administrators.
 
-### 🛠️ Intelligent Document Parsing
+### 🛠️ Intelligent Document Parsing & Retrieval
 - **Triple-Tier Hybrid PDF Parsing:**
   - **Structural (Markdownification):** Converts PDF layout to Markdown headers for logical grouping.
   - **Semantic:** Uses AI embeddings and cosine distance to detect topic changes and split chunks logically.
   - **Recursive:** Employs layout-aware recursive splitting to preserve sentence and table row integrity.
-- **Granular CSV Indexing:** Every row in a CSV is indexed as a self-contained document to ensure high accuracy for tabular data (e.g., specific coverage or premium lists).
-- **Structured Lookup:** Specialized routing for benefits CSVs with reduced context injection for high-precision queries.
+- **Advanced CSV Ingestion:**
+  - **Metadata Carry-Forward:** Automatically fills merged or empty cells by propagating category headers (e.g., "Surgical Benefits") down to every sub-row.
+  - **Pairwise Transformation:** Converts rows into semantically rich strings (`Header: Value;`) for superior embedding quality.
+  - **Metadata Trimming:** Professional-grade lean storage that keeps only essential search and filtering keys.
+- **Enterprise Retrieval Strategy:**
+  - **Plan-Aware Hard Filtering:** Detects user plan mentions (e.g., "1.5M") and uses metadata to physically filter out irrelevant data at the database level.
+  - **Hybrid Search (Semantic + Keyword):** Combines vector similarity with an weighted keyword scoring system to handle acronyms and technical terms (IP, ER, FNOL).
+  - **Contextual Grouping (Parent-Child):** Automatically re-assembles fragmented table rows into complete "Benefit Families" to ensure the LLM sees the full context of a category.
 
 ### 🛠️ Admin Capabilities
 - **Document Management:** Upload, re-ingest, or delete insurance policies through a dedicated UI.
@@ -98,10 +104,10 @@ Access the application at `http://localhost:8001`.
 
 ## 🔄 Document Workflow
 
-1. **Ingestion:** Admin uploads a PDF/CSV -> System applies structural (Markdown) or row-based parsing -> Bedrock generates embeddings.
-2. **Storage:** Chunks and vectors are stored in **Pinecone** under a unique namespace.
-3. **Retrieval:** User asks a question -> System searches Pinecone for relevant context using semantic similarity.
-4. **Generation:** Bedrock (Claude) synthesizes a direct answer based **strictly** on the retrieved context via a LangGraph-orchestrated agent.
+1. **Ingestion:** Admin uploads a PDF/CSV -> Parser applies **Carry-Forward** logic for tables -> Rows are converted to **Pairwise Strings** -> Lean metadata is generated.
+2. **Storage:** Vectors and **Filtered-Ready Metadata** are stored in **Pinecone**.
+3. **Retrieval:** User asks a question -> System performs **Hybrid Search** -> Detects Plan constraints for **Hard Filtering** -> Applies **Contextual Grouping** to expand fragments into full benefit lists.
+4. **Generation:** Bedrock (Claude) synthesizes a direct answer based **strictly** on the retrieved context. **Strict Guardrails** prevent medical inference or category guessing.
 
 ---
 *Developed for MediLink Insurance.*
