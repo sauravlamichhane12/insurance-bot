@@ -260,6 +260,203 @@ def _csv_row_to_text(headers: list[str], row: list[str]) -> str:
     return "; ".join(pairs)
 
 
+def _normalize_metadata_key(value: str) -> str:
+    cleaned = re.sub(r"[^a-z0-9]+", "_", (value or "").strip().lower()).strip("_")
+    if cleaned and cleaned[0].isdigit():
+        cleaned = f"field_{cleaned}"
+    return cleaned or "field"
+
+
+def _tokenize_for_match(text: str) -> list[str]:
+    return re.findall(r"[a-z0-9]+(?:\.[0-9]+)?", (text or "").lower())
+
+
+def _extract_query_keywords(query: str) -> list[str]:
+    stopwords = {
+        "a", "an", "and", "are", "as", "basis", "benefit", "benefits", "by", "compare",
+        "covered", "coverage", "daily", "difference", "does", "for", "get", "have",
+        "how", "i", "if", "in", "include", "included", "is", "limit", "limits", "m",
+        "me", "of", "on", "or", "plan", "same", "show", "the", "then", "to", "under",
+        "visit", "what", "which", "with", "year",
+    }
+    return [
+        token for token in _tokenize_for_match(query)
+        if token not in stopwords and len(token) > 2
+    ]
+
+
+def _extract_plan_terms(query: str) -> set[str]:
+    normalized = (query or "").lower()
+    matches = set(re.findall(r"\bplan\s*([0-9]+(?:\.[0-9]+)?m)\b", normalized))
+    compact_matches = set(re.findall(r"\b([0-9]+(?:\.[0-9]+)?m)\b", normalized))
+    return {f"plan {value}" for value in matches | compact_matches}
+
+
+def _is_csv_metadata_row(metadata: dict[str, Any]) -> bool:
+    source = (
+        metadata.get("mime_type")
+        or metadata.get("source")
+        or metadata.get("original_name")
+        or ""
+    )
+    if str(source).lower() == "text/csv":
+        return True
+    if str(source).lower().endswith(".csv"):
+        return True
+    return "benefit_name" in metadata or "sub_benefit" in metadata
+
+
+def _score_csv_metadata_match(query: str, metadata: dict[str, Any], content: str) -> tuple[float, int]:
+    query_lower = query.lower()
+    keywords = _extract_query_keywords(query)
+    plan_terms = _extract_plan_terms(query)
+
+    benefit_text = " ".join(
+        _normalize_whitespace(str(metadata.get(key, "")))
+        for key in ("benefit_name", "sub_benefit", "benefit_type")
+    ).lower()
+    auxiliary_text = " ".join(
+        _normalize_whitespace(str(metadata.get(key, "")))
+        for key in ("limit_type", "limit_cycle")
+    ).lower()
+    full_text = _normalize_whitespace(content).lower()
+
+    benefit_tokens = set(_tokenize_for_match(benefit_text))
+    auxiliary_tokens = set(_tokenize_for_match(auxiliary_text))
+    full_tokens = set(_tokenize_for_match(full_text))
+
+    score = 0.0
+    benefit_hits = 0
+    for token in keywords:
+        if token in benefit_tokens:
+            score += 4.0
+            benefit_hits += 1
+        elif token in auxiliary_tokens:
+            score += 2.0
+        elif token in full_tokens:
+            score += 1.0
+
+    if benefit_hits >= 2:
+        score += 4.0
+
+    for phrase in (
+        _normalize_whitespace(str(metadata.get("benefit_name", ""))).lower(),
+        _normalize_whitespace(str(metadata.get("sub_benefit", ""))).lower(),
+    ):
+        if phrase and len(phrase) > 3 and phrase in query_lower:
+            score += 8.0
+
+    requested_plan_keys = {_normalize_metadata_key(plan) for plan in plan_terms}
+    if requested_plan_keys:
+        available_plans = {
+            key for key, value in metadata.items()
+            if key.startswith("plan_") and str(value).strip()
+        }
+        matched_plan_keys = requested_plan_keys & available_plans
+        score += len(matched_plan_keys) * 3.0
+
+    row_number = _safe_page_number(metadata.get("row_number") or metadata.get("page_number")) or 10**9
+    return score, row_number
+
+
+def _format_csv_metadata_row(query: str, metadata: dict[str, Any], fallback_text: str) -> str:
+    requested_plan_keys = {_normalize_metadata_key(plan) for plan in _extract_plan_terms(query)}
+    parts: list[str] = []
+
+    for key, label in (
+        ("benefit_type", "Benefit Type"),
+        ("benefit_name", "Benefit Name"),
+        ("sub_benefit", "Sub Benefit"),
+        ("limit_type", "Limit Type"),
+        ("limit_cycle", "Limit Cycle"),
+    ):
+        value = _normalize_whitespace(str(metadata.get(key, "")))
+        if not value or (key == "sub_benefit" and value.lower() == "na"):
+            continue
+        parts.append(f"{label}: {value}")
+
+    plan_fields = [
+        (key, value)
+        for key, value in metadata.items()
+        if key.startswith("plan_") and not key.endswith("_norm") and str(value).strip()
+    ]
+    for key, value in sorted(plan_fields):
+        if requested_plan_keys and key not in requested_plan_keys:
+            continue
+        label = key.replace("_", " ").title().replace("Plan ", "Plan ")
+        parts.append(f"{label}: {value}")
+
+    return "; ".join(parts) if parts else fallback_text
+
+
+def _is_grouped_csv_query(query: str) -> bool:
+    normalized = (query or "").lower()
+    markers = (
+        "what is included",
+        "what's included",
+        "what includes",
+        "included in",
+        "includes under",
+        "included under",
+        "sub benefits",
+        "sub-benefits",
+        "complete list",
+        "line items",
+    )
+    return any(marker in normalized for marker in markers)
+
+
+def _group_csv_rows_by_benefit_name(
+    query: str,
+    scored_csv_rows: list[tuple[tuple[float, int], Document, float]],
+    fallback_limit: int,
+) -> tuple[list[tuple[Document, float]], bool, str | None]:
+    if not scored_csv_rows:
+        return [], False, None
+
+    best_doc = scored_csv_rows[0][1]
+    best_meta = best_doc.metadata or {}
+    target_benefit_name = _normalize_whitespace(str(best_meta.get("benefit_name", "")))
+    if not target_benefit_name:
+        return [(doc, score) for _match, doc, score in scored_csv_rows[:fallback_limit]], False, None
+
+    top_csv_score = scored_csv_rows[0][0][0]
+    repeated_benefit_rows = [
+        (doc, score)
+        for (match_score, _row_number), doc, score in scored_csv_rows
+        if (
+            _normalize_whitespace(str((doc.metadata or {}).get("benefit_name", ""))) == target_benefit_name
+            and match_score >= max(2.0, top_csv_score - 4.0)
+        )
+    ]
+
+    should_group = _is_grouped_csv_query(query) or len(repeated_benefit_rows) >= 3
+    if not should_group:
+        selected_results = [
+            (doc, score)
+            for (_match_score, _row_number), doc, score in scored_csv_rows
+        ]
+        selected_results.sort(
+            key=lambda item: (
+                -_score_csv_metadata_match(query, item[0].metadata or {}, item[0].page_content)[0],
+                -item[1],
+                _safe_page_number(item[0].metadata.get("row_number") or item[0].metadata.get("page_number")) or 10**9,
+            )
+        )
+        selected_results = selected_results[:fallback_limit]
+        return selected_results, False, None
+
+    grouped_rows = [
+        (doc, score)
+        for (_match, doc, score) in scored_csv_rows
+        if _normalize_whitespace(str((doc.metadata or {}).get("benefit_name", ""))) == target_benefit_name
+    ]
+    if not grouped_rows:
+        return [(doc, score) for _match, doc, score in scored_csv_rows[:fallback_limit]], False, None
+
+    return grouped_rows, True, target_benefit_name
+
+
 def _read_csv_rows(file_path: Path) -> list[list[str]]:
     for encoding in ("utf-8-sig", "utf-8", "cp1252", "latin-1"):
         try:
@@ -323,26 +520,55 @@ class RAGService:
 
     def _build_agent(self):
         @tool
-        def retrieve_document_context(query: str, document_id: str | None = None, max_results: int = 2) -> str:
+        def retrieve_document_context(query: str, document_id: str | None = None, max_results: int = 4) -> str:
             """Retrieve only the minimum document context needed to answer the question."""
             metadata_filter = None
             if document_id:
                 metadata_filter = {"document_id": {"$eq": str(document_id)}}
-            query_lower = query.lower()
-            suggested_max = 2 if any(marker in query_lower for marker in (" and ", " compare", " both ", " which ", ",")) else 1
+
+            is_group_query = _is_grouped_csv_query(query)
+            candidate_count = 24 if is_group_query else max(8, min(max_results * 3, 12))
             results = self.vector_store.similarity_search_with_score(
                 query,
-                k=min(max_results, suggested_max),
+                k=candidate_count,
                 filter=metadata_filter,
             )
             if not results:
                 return "No relevant passages were found in the uploaded documents."
 
+            csv_rows = [(doc, score) for doc, score in results if _is_csv_metadata_row(doc.metadata or {})]
+            non_csv_rows = [(doc, score) for doc, score in results if not _is_csv_metadata_row(doc.metadata or {})]
+            selected_results: list[tuple[Document, float]]
+            retrieval_scope = "partial"
+            grouped_benefit_name: str | None = None
+            if csv_rows:
+                scored_csv_rows = [
+                    (_score_csv_metadata_match(query, doc.metadata or {}, doc.page_content), doc, score)
+                    for doc, score in csv_rows
+                ]
+                reranked_csv_rows = sorted(
+                    scored_csv_rows,
+                    key=lambda item: (-item[0][0], -item[2], item[0][1]),
+                )
+                selected_results, used_grouping, grouped_benefit_name = _group_csv_rows_by_benefit_name(
+                    query,
+                    reranked_csv_rows,
+                    max_results,
+                )
+                retrieval_scope = "complete" if used_grouping else "partial"
+                if not used_grouping and len(selected_results) < max_results:
+                    selected_results.extend(non_csv_rows[: max_results - len(selected_results)])
+            else:
+                selected_results = results[:max_results]
+
             lines: list[str] = []
             current_total_chars = 0
-            max_total_chars = 900
+            max_total_chars = 2200 if retrieval_scope == "complete" else 900
+            if grouped_benefit_name:
+                lines.append(f"Retrieved benefit group: {grouped_benefit_name}")
+                lines.append(f"Coverage scope: {retrieval_scope}")
             
-            for rank, (doc, _score) in enumerate(results, start=1):
+            for rank, (doc, _score) in enumerate(selected_results, start=1):
                 meta = doc.metadata or {}
                 source = meta.get("original_name") or meta.get("source") or "document"
                 page = _safe_page_number(meta.get("page_number") or meta.get("page"))
@@ -351,6 +577,8 @@ class RAGService:
                     header += f" row/page {page}"
                 
                 content = doc.page_content.strip()
+                if _is_csv_metadata_row(meta):
+                    content = _format_csv_metadata_row(query, meta, content)
                 if current_total_chars + len(content) > max_total_chars:
                     remaining_budget = max_total_chars - current_total_chars
                     if remaining_budget > 50:
@@ -366,18 +594,21 @@ class RAGService:
             model=self.chat_model,
             tools=[retrieve_document_context],
             checkpointer=self.checkpointer,
-            middleware=[
-                ModelCallLimitMiddleware(run_limit=3, exit_behavior="end"),
-            ],
-            system_prompt=(
-                "Answer using only MediLink insurance documents. "
-                "Use retrieve_document_context once unless the first retrieval is clearly insufficient. "
-                "If the answer is not in the documents, say so. "
-                "Reply in one short paragraph or two very short paragraphs. "
-                "Do not use headings, bullets, tables, markdown formatting, or preambles. "
-                "Start with the answer and explain limits plainly."
-            ),
-        )
+            system_prompt=("""
+    Answer based only on retrieved context. Do not use outside knowledge or fill gaps with inference.
+
+    - Direct match: Answer clearly and precisely.
+    - Partial match: State the answer is limited to the retrieved rows.
+    - No match: Say it is not confirmed by the documents.
+    - Unnamed item: Do not infer coverage from a related category. You may mention the closest retrieved benefit as context only.
+
+    Lists: Present only retrieved line items. If completeness is uncertain, say "the retrieved rows show." Do not add catch-all items.
+
+    Comparisons: Use only what is explicitly shown. Preserve distinctions (plan limit, inner limit, daily cap, per-visit, "As Charged," etc.). Do not convert plan names to amounts unless stated.
+
+    Never: Narrate your process, expose tool usage, or say "let me check."
+""")
+    )
 
     def _extract_pages(self, file_path: Path) -> list[Document]:
         reader = PdfReader(str(file_path))
@@ -474,7 +705,17 @@ class RAGService:
                         "section_title": f"CSV row {row_number} of {file_path.name}",
                         "columns": headers,
                         "source_name": file_path.name,
-                        "source": file_path.name
+                        "source": file_path.name,
+                        **{
+                            _normalize_metadata_key(headers[index]): normalized_row[index]
+                            for index in range(len(headers))
+                            if normalized_row[index]
+                        },
+                        **{
+                            f"{_normalize_metadata_key(headers[index])}_norm": _normalize_metadata_key(normalized_row[index]).replace("_", " ")
+                            for index in range(len(headers))
+                            if normalized_row[index]
+                        },
                     },
                 )
             )
