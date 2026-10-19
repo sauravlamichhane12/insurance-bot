@@ -1,8 +1,29 @@
-node_modules
-npm-debug.log
+# Folders to ignore
+node_modules/
+venv/
+venv_*/
+.venv/
+scripts/
+data/
+uploads/
+.git/
+.github/
+.vscode/
+.idea/
+
+# Files to ignore
 .env
-.git
-.gitignore
+.env.*
+!.env.example
 Dockerfile
 docker-compose.yml
+docker-compose.override.yml
 README.md
+*.log
+__pycache__/
+*.py[cod]
+.DS_Store
+*.csv
+*.pdf
+trace_output.json
+

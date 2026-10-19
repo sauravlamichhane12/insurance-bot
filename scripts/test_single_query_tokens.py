@@ -75,6 +75,16 @@ def _usage_dict(message: Any) -> dict[str, int]:
 
 
 def extract_token_usage_entries(agent_result: Any) -> list[TokenUsageEntry]:
+    if hasattr(agent_result, "usage_metadata"):
+        usage = _usage_dict(agent_result)
+        return [
+            TokenUsageEntry(
+                input_tokens=usage["input_tokens"],
+                output_tokens=usage["output_tokens"],
+                total_tokens=usage["total_tokens"],
+            )
+        ] if usage else []
+
     messages = agent_result.get("messages") if isinstance(agent_result, dict) else getattr(agent_result, "messages", None)
     messages = messages or []
     entries: list[TokenUsageEntry] = []
@@ -100,6 +110,11 @@ def summarize_token_usage(entries: list[TokenUsageEntry]) -> dict[str, int]:
 
 
 def extract_final_response_text(agent_result: Any) -> str:
+    if hasattr(agent_result, "content") and isinstance(getattr(agent_result, "content"), str):
+        text = getattr(agent_result, "content").strip()
+        if text:
+            return text
+
     messages = agent_result.get("messages") if isinstance(agent_result, dict) else getattr(agent_result, "messages", None)
     messages = messages or []
     for message in reversed(messages):
@@ -112,6 +127,13 @@ def extract_final_response_text(agent_result: Any) -> str:
         if isinstance(fallback_output, str):
             return fallback_output.strip()
     return ""
+
+
+def _compact_text(text: str, limit: int) -> str:
+    text = " ".join((text or "").split())
+    if len(text) <= limit:
+        return text
+    return f"{text[: max(limit - 3, 0)].rstrip()}..."
 
 
 def parse_args() -> argparse.Namespace:
@@ -137,6 +159,7 @@ def main() -> int:
 
     stream_thread_id = f"frontend-stream-{secrets.token_urlsafe(6)}"
     usage_thread_id = f"frontend-usage-{secrets.token_urlsafe(6)}"
+    route = service._route_query(args.question)
 
     stream_chunks: list[str] = []
     stream_metadata: list[dict[str, object]] = []
@@ -145,12 +168,31 @@ def main() -> int:
         if isinstance(metadata, dict):
             stream_metadata.append(metadata)
 
-    # stream_answer() matches app behavior, but it does not expose usage_metadata.
-    # Use a second fresh thread with the same message preparation path to get exact token counts.
-    result = service.agent.invoke(
-        {"messages": service._prepare_messages(args.question, None, thread_id=usage_thread_id)},
-        config={"configurable": {"thread_id": usage_thread_id}},
-    )
+    if route == "direct":
+        context = service._retrieve_direct_context(args.question, max_results=2)
+        direct_messages = [
+            {
+                "role": "system",
+                "content": (
+                    "Answer using only the provided MediLink document context. "
+                    "If the answer is not present, say so. "
+                    "Be concise and start with the answer."
+                ),
+            },
+            {
+                "role": "user",
+                "content": f"Context:\n{context}\n\nQuestion: {args.question}",
+            },
+        ]
+        result = service.chat_model.invoke(direct_messages)
+    else:
+        # stream_answer() matches app behavior, but it does not expose usage_metadata.
+        # Use a second fresh thread with the same message preparation path to get exact token counts.
+        result = service.agent.invoke(
+            {"messages": service._prepare_messages(args.question, None, thread_id=usage_thread_id)},
+            config={"configurable": {"thread_id": usage_thread_id}},
+        )
+
     entries = extract_token_usage_entries(result)
     summary = summarize_token_usage(entries)
 
@@ -179,6 +221,7 @@ def main() -> int:
             "llm_input_tokens": summary["llm_input_tokens"],
             "llm_output_tokens": summary["llm_output_tokens"],
             "llm_total_tokens": summary["llm_total_tokens"],
+            "route": route,
         },
     }
 
@@ -192,6 +235,7 @@ def main() -> int:
     print(f"Question: {report['question']}")
     print(f"Stream thread id: {stream_thread_id}")
     print(f"Usage thread id:  {usage_thread_id}")
+    print(f"Route:            {route}")
     print("-" * 72)
     print("[STREAM PATH]")
     print(f"- chunk count:      {report['stream']['chunk_count']}")

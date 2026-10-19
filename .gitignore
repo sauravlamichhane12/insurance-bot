@@ -13,6 +13,13 @@ venv/
 
 data/
 uploads/
+user_base/
+packages/
+venv_*/
+trace_output.json
+*.csv
+*.so
+.freebuff/
 npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
